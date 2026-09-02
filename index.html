@@ -573,6 +573,10 @@ textarea{resize:vertical;min-height:70px;}
       <!-- ORDERS TAB -->
       <div class="admin-tab-panel" id="tabOrders">
         <div class="stat-grid" id="orderStats"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:4px 0 14px;flex-wrap:wrap;gap:10px;">
+          <p style="font-size:0.78rem;color:var(--coffee-soft);margin:0;">ออเดอร์ของวันก่อนหน้าจะถูกเก็บเป็นไฟล์ Excel แล้วลบออกจากหน้านี้ให้อัตโนมัติ</p>
+          <button class="mini-btn" onclick="archiveOldOrders(false)">📦 เก็บถาวรออเดอร์เก่าตอนนี้</button>
+        </div>
         <div id="ordersList"></div>
       </div>
 
@@ -582,9 +586,10 @@ textarea{resize:vertical;min-height:70px;}
       <div class="admin-tab-panel" id="tabSummary" style="display:none;">
         <div class="stat-grid" id="summaryStatGrid"></div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 10px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 4px;flex-wrap:wrap;gap:10px;">
           <h3 style="font-size:1.05rem;">🧾 รายการยอดขายเดือนนี้</h3>
         </div>
+        <p style="font-size:0.78rem;color:var(--coffee-soft);margin:0 0 10px;">แสดงเฉพาะออเดอร์ที่ยังไม่ถูกเก็บถาวร (ยอดรวมของวันที่เก็บถาวรแล้วยังนับรวมในสถิติด้านบนตามปกติ)</p>
         <div class="table-scroll">
           <table class="summary-table">
             <thead><tr><th>เลขที่ออเดอร์</th><th>วันที่</th><th>ลูกค้า</th><th>ช่องทาง</th><th>ยอดขาย</th></tr></thead>
@@ -856,6 +861,108 @@ async function deleteOrderCompletely(id){
 }
 
 /* =========================================================
+   เก็บถาวรออเดอร์เก่า (วันก่อนหน้า) → ดาวน์โหลด Excel แล้วลบออกจากระบบ
+   เพื่อไม่ให้หน้าออเดอร์ยาวเกินไป และลดปริมาณข้อมูลที่ต้องเก็บบน Firestore
+
+   ก่อนลบ จะบวกยอดขาย/จำนวนออเดอร์/กำไรของแต่ละวันเก็บไว้ในเอกสารเล็กๆ ตัวเดียว
+   ('day-summary-index') เพื่อให้หน้า "สรุปยอดขาย" ยังคำนวณยอดรายสัปดาห์/รายเดือน/% เติบโต
+   ได้ถูกต้องตลอดไป แม้ออเดอร์ตัวจริง (รายละเอียดลูกค้า/รายการ) จะถูกลบไปแล้วก็ตาม
+   รายละเอียดระดับออเดอร์ของวันที่ถูกเก็บถาวรแล้ว จะเหลืออยู่แค่ในไฟล์ Excel ที่ดาวน์โหลดไปเท่านั้น
+========================================================= */
+function fmtDateForFile(d){ return d.toISOString().slice(0,10); }
+function isoDay(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function dayLabelFromIso(iso){ const [y,m,d]=iso.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('th-TH'); }
+async function fetchArchivedDaySummaries(){
+  try{
+    const r = await window.storage.get('day-summary-index', true);
+    return (r && r.value) ? JSON.parse(r.value) : {};
+  }catch(e){ return {}; }
+}
+async function checkAndArchiveOldOrders(){
+  // เรียกอัตโนมัติหลังล็อกอิน — ทำงานแบบเงียบถ้าไม่มีออเดอร์เก่า ถ้ามีจะขึ้นถามยืนยันก่อนเสมอ
+  if(state._archiving) return;
+  await archiveOldOrders(true);
+}
+async function archiveOldOrders(silent){
+  if(state._archiving) return;
+  const orders = await fetchOrders();
+  const todayStr = new Date().toDateString();
+  const oldOrders = orders.filter(o => new Date(o.time).toDateString() !== todayStr);
+  if(oldOrders.length===0){
+    if(!silent) toast('ไม่มีออเดอร์เก่าที่ต้องเก็บถาวรตอนนี้');
+    return;
+  }
+  if(typeof XLSX==='undefined'){
+    toast('โหลดไลบรารี Excel ไม่สำเร็จ ยังไม่เก็บถาวรออเดอร์เก่า ลองใหม่อีกครั้ง');
+    return;
+  }
+  const totalAmt = oldOrders.reduce((s,o)=>s+o.total,0);
+  const ok = confirm(
+    `พบออเดอร์เก่าจากวันก่อนหน้า ${oldOrders.length} รายการ (รวม ${money(totalAmt)})\n\n`+
+    `ระบบจะดาวน์โหลดเป็นไฟล์ Excel เก็บไว้ก่อน แล้วลบรายละเอียดออเดอร์ออกจากระบบทันที (กู้คืนไม่ได้)\n`+
+    `ยอดรวมของวันนั้นๆ จะยังถูกเก็บไว้ ทำให้หน้าสรุปยอดขายรายสัปดาห์/รายเดือน/% เติบโตยังใช้งานได้ปกติ\n`+
+    `แต่รายละเอียดออเดอร์ (ชื่อลูกค้า/รายการ) จะเหลือแค่ในไฟล์ Excel ที่ดาวน์โหลดเท่านั้น\n\n`+
+    `กด "ตกลง" เพื่อเก็บถาวรตอนนี้ หรือกด "ยกเลิก" เพื่อดูออเดอร์เก่าต่อไปก่อน`
+  );
+  if(!ok){ if(!silent) toast('ยกเลิก — ออเดอร์เก่ายังอยู่ในระบบเหมือนเดิม'); return; }
+
+  state._archiving = true;
+  try{
+    const ordersSheet = oldOrders.map(o=>({
+      'เลขที่ออเดอร์':o.id, 'วันเวลา':new Date(o.time).toLocaleString('th-TH'),
+      'ช่องทาง':o.channel==='pos'?'หน้าร้าน':'ออนไลน์', 'ชื่อลูกค้า':o.name, 'เบอร์โทร':o.phone,
+      'รับสินค้า':o.fulfil==='delivery'?'จัดส่ง':'หน้าร้าน', 'วิธีชำระเงิน':o.paymentMethod==='cash'?'เงินสด':'โอนเงิน',
+      'รายการ':o.items.map(i=>`${i.name} x${i.qty}${i.toppings.length?' ('+i.toppings.join(', ')+')':''}`).join(', '),
+      'ยอดรวม':o.total, 'กำไรโดยประมาณ':orderProfit(o), 'สถานะ':o.status
+    }));
+    // จัดกลุ่มตามวัน (คีย์ ISO เพื่อเก็บลง day-summary-index ได้ตรงกัน) เฉพาะออเดอร์ที่ไม่ถูกยกเลิก
+    const byDayIso = {};
+    oldOrders.filter(o=>o.status!=='cancelled').forEach(o=>{
+      const d = new Date(o.time);
+      const iso = isoDay(d);
+      if(!byDayIso[iso]) byDayIso[iso] = {count:0,total:0,profit:0};
+      byDayIso[iso].count++; byDayIso[iso].total+=o.total; byDayIso[iso].profit+=orderProfit(o);
+    });
+    const dayRows = Object.entries(byDayIso).map(([iso,v])=>({'วันที่':dayLabelFromIso(iso),'จำนวนออเดอร์':v.count,'ยอดขาย':v.total,'กำไรโดยประมาณ':v.profit}));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersSheet), 'ออเดอร์ที่เก็บถาวร');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dayRows), 'สรุปรายวัน');
+
+    const times = oldOrders.map(o=>new Date(o.time).getTime());
+    const oldestDate = new Date(Math.min(...times));
+    const newestDate = new Date(Math.max(...times));
+    XLSX.writeFile(wb, `เก็บถาวรออเดอร์-Ryokao-${fmtDateForFile(oldestDate)}_ถึง_${fmtDateForFile(newestDate)}.xlsx`);
+
+    toast('กำลังเก็บถาวรออเดอร์เก่า...');
+
+    // บันทึกยอดรวมของแต่ละวันไว้ใน day-summary-index ก่อนลบของจริง (บวกเพิ่มจากของเดิมถ้ามี กันข้อมูลหาย)
+    const dayIdxRes = await window.storage.get('day-summary-index', true).catch(()=>null);
+    const dayIdx = dayIdxRes && dayIdxRes.value ? JSON.parse(dayIdxRes.value) : {};
+    Object.entries(byDayIso).forEach(([iso,v])=>{
+      const existing = dayIdx[iso] || {count:0,total:0,profit:0};
+      dayIdx[iso] = {count:existing.count+v.count, total:existing.total+v.total, profit:existing.profit+v.profit};
+    });
+    await window.storage.set('day-summary-index', JSON.stringify(dayIdx), true);
+
+    // ลบออเดอร์ทั้งหมดออกจาก Firestore แบบขนาน แล้วอัปเดต index ครั้งเดียว (เร็วกว่าลบทีละใบ)
+    await Promise.all(oldOrders.map(o => window.storage.delete('order:'+o.id, true).catch(()=>{})));
+    const idxRes = await window.storage.get('order-index', true).catch(()=>null);
+    const idx = idxRes && idxRes.value ? JSON.parse(idxRes.value) : [];
+    const oldIds = new Set(oldOrders.map(o=>o.id));
+    await window.storage.set('order-index', JSON.stringify(idx.filter(id=>!oldIds.has(id))), true);
+
+    toast(`เก็บถาวรออเดอร์เก่า ${oldOrders.length} รายการเรียบร้อยแล้ว`);
+    renderOrdersTab();
+  }catch(e){
+    console.warn('archive old orders failed', e);
+    toast('เก็บถาวรออเดอร์เก่าไม่สำเร็จ ลองใหม่อีกครั้ง');
+  }finally{
+    state._archiving = false;
+  }
+}
+
+/* =========================================================
    TOAST NOTIFICATION
 ========================================================= */
 function toast(msg){
@@ -900,6 +1007,9 @@ function showAdminPanel(){
   document.getElementById('logoutBtn').style.display='flex';
   switchAdminTab('orders');
   renderMenuAdmin(); renderPromoAdmin(); renderIngredientAdmin(); fillSettingsForm();
+  /* เช็คทุกครั้งที่ล็อกอินเข้ามาว่ามีออเดอร์ค้างจากวันก่อนหน้าหรือไม่ ถ้ามีจะเสนอเก็บถาวรลง Excel
+     แล้วลบออกจากระบบให้อัตโนมัติ (ไม่ทำแบบเงียบๆ — ต้องกด "ตกลง" ก่อนเสมอ กันข้อมูลหายโดยไม่ตั้งใจ) */
+  checkAndArchiveOldOrders();
 }
 function logoutAdmin(){
   state.adminOn = false;
@@ -1099,46 +1209,68 @@ function toggleMonthCard(key){
 }
 async function renderSummaryTab(){
   const orders = (await fetchOrders()).filter(o=>o.status!=='cancelled');
+  const archived = await fetchArchivedDaySummaries(); // ยอดรวมของวันที่เก็บถาวรไปแล้ว (ไม่มีรายละเอียดออเดอร์)
   const now = new Date();
   const todayStr = now.toDateString();
   const weekStart = startOfWeek(now);
   const yearNow = now.getFullYear();
   const curMonthKey = monthKeyOf(now);
 
-  const todayOrders = orders.filter(o=>new Date(o.time).toDateString()===todayStr);
-  const weekOrders = orders.filter(o=>new Date(o.time) >= weekStart);
-  const yearOrders = orders.filter(o=>new Date(o.time).getFullYear()===yearNow);
+  // รวมยอดขายรายวันจาก "ออเดอร์ที่ยังอยู่ในระบบ" + "ยอดที่เก็บถาวรไปแล้ว" เข้าด้วยกัน
+  // ไม่งั้นยอดรายสัปดาห์/รายเดือน/% เติบโต จะตกไปเรื่อยๆ ทุกครั้งที่มีการเก็บถาวรออเดอร์เก่า
+  const combinedByDay = {};
+  Object.entries(archived).forEach(([iso,v])=>{
+    const [y,m,d] = iso.split('-').map(Number);
+    combinedByDay[iso] = {count:v.count||0, total:v.total||0, profit:v.profit||0, ts:new Date(y,m-1,d).getTime()};
+  });
+  orders.forEach(o=>{
+    const d = new Date(o.time);
+    const iso = isoDay(d);
+    if(!combinedByDay[iso]) combinedByDay[iso] = {count:0,total:0,profit:0,ts:new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()};
+    combinedByDay[iso].count++; combinedByDay[iso].total+=o.total; combinedByDay[iso].profit+=orderProfit(o);
+  });
+
+  const todayOrders = orders.filter(o=>new Date(o.time).toDateString()===todayStr); // วันนี้ยังไม่ถูกเก็บถาวรแน่นอน
+  const weekDays = Object.values(combinedByDay).filter(d=>d.ts>=weekStart.getTime());
+  const weekTotal = weekDays.reduce((s,d)=>s+d.total,0);
+  const weekCount = weekDays.reduce((s,d)=>s+d.count,0);
+  const yearDays = Object.entries(combinedByDay).filter(([iso])=>iso.slice(0,4)===String(yearNow));
+  const yearTotal = yearDays.reduce((s,[,d])=>s+d.total,0);
+  const yearCount = yearDays.reduce((s,[,d])=>s+d.count,0);
+  const yearProfit = yearDays.reduce((s,[,d])=>s+d.profit,0);
   const thisMonthOrders = orders.filter(o=>monthKeyOf(new Date(o.time))===curMonthKey)
                                  .sort((a,b)=>new Date(b.time)-new Date(a.time));
 
   const sum = arr => arr.reduce((s,o)=>s+o.total,0);
-  const profitSum = arr => arr.reduce((s,o)=>s+orderProfit(o),0);
 
-  // จัดกลุ่มออเดอร์ทั้งหมดตามเดือน ใช้ทั้งคำนวณ % เติบโต และแสดงการ์ดสรุปรายเดือน
+  // จัดกลุ่มยอดขายรวม (จากทั้งของที่ยังอยู่ในระบบ + ที่เก็บถาวรแล้ว) ตามเดือน ใช้คำนวณ % เติบโต และการ์ดสรุปรายเดือน
   const byMonth = {};
-  orders.forEach(o=>{
-    const d = new Date(o.time);
-    const key = monthKeyOf(d);
-    if(!byMonth[key]) byMonth[key] = {count:0, total:0, profit:0, label:monthLabelOf(d), ts:new Date(d.getFullYear(),d.getMonth(),1).getTime()};
-    byMonth[key].count++; byMonth[key].total += o.total; byMonth[key].profit += orderProfit(o);
+  Object.entries(combinedByDay).forEach(([iso,d])=>{
+    const key = iso.slice(0,7); // YYYY-MM
+    if(!byMonth[key]){
+      const [y,m] = key.split('-').map(Number);
+      byMonth[key] = {count:0, total:0, profit:0, label:monthLabelOf(new Date(y,m-1,1)), ts:new Date(y,m-1,1).getTime()};
+    }
+    byMonth[key].count += d.count; byMonth[key].total += d.total; byMonth[key].profit += d.profit;
   });
   const monthEntries = Object.entries(byMonth).sort((a,b)=>b[1].ts-a[1].ts); // เดือนล่าสุดอยู่บนสุด
 
   // % เติบโตของยอดขายเดือนนี้ เทียบกับเดือนก่อนหน้า
   const prevMonthKey = monthKeyOf(new Date(now.getFullYear(), now.getMonth()-1, 1));
   const curMonthTotal = byMonth[curMonthKey] ? byMonth[curMonthKey].total : 0;
+  const curMonthCount = byMonth[curMonthKey] ? byMonth[curMonthKey].count : 0;
   const prevMonthTotal = byMonth[prevMonthKey] ? byMonth[prevMonthKey].total : 0;
   const monthGrowthPct = prevMonthTotal>0 ? ((curMonthTotal-prevMonthTotal)/prevMonthTotal*100) : (curMonthTotal>0 ? Infinity : 0);
 
   document.getElementById('summaryStatGrid').innerHTML = `
     <div class="stat-card"><b>${money(sum(todayOrders))}</b><span>ยอดขายวันนี้ (${todayOrders.length} ออเดอร์)</span></div>
-    <div class="stat-card"><b>${money(sum(weekOrders))}</b><span>ยอดขายสัปดาห์นี้ (${weekOrders.length} ออเดอร์)</span></div>
-    <div class="stat-card"><b>${money(curMonthTotal)}</b><span>ยอดขายเดือนนี้ (${thisMonthOrders.length} ออเดอร์)</span><div style="margin-top:6px;">${growthBadge(monthGrowthPct)}</div></div>
-    <div class="stat-card"><b>${money(sum(yearOrders))}</b><span>ยอดขายปีนี้ (${yearOrders.length} ออเดอร์)</span></div>
-    <div class="stat-card"><b>${money(profitSum(yearOrders))}</b><span>กำไรโดยประมาณปีนี้</span></div>
+    <div class="stat-card"><b>${money(weekTotal)}</b><span>ยอดขายสัปดาห์นี้ (${weekCount} ออเดอร์)</span></div>
+    <div class="stat-card"><b>${money(curMonthTotal)}</b><span>ยอดขายเดือนนี้ (${curMonthCount} ออเดอร์)</span><div style="margin-top:6px;">${growthBadge(monthGrowthPct)}</div></div>
+    <div class="stat-card"><b>${money(yearTotal)}</b><span>ยอดขายปีนี้ (${yearCount} ออเดอร์)</span></div>
+    <div class="stat-card"><b>${money(yearProfit)}</b><span>กำไรโดยประมาณปีนี้</span></div>
   `;
 
-  // รายการยอดขายของเดือนนี้ ทีละออเดอร์
+  // รายการยอดขายของเดือนนี้ ทีละออเดอร์ — แสดงได้เฉพาะออเดอร์ที่ยังไม่ถูกเก็บถาวร (ยอดรวมของวันที่เก็บถาวรแล้วยังคิดในสถิติด้านบนตามปกติ)
   document.getElementById('summaryThisMonthBody').innerHTML = thisMonthOrders.map(o=>`
     <tr>
       <td>${o.id}</td>
@@ -1147,20 +1279,16 @@ async function renderSummaryTab(){
       <td>${o.channel==='pos'?'หน้าร้าน':'ออนไลน์'}</td>
       <td>${money(o.total)}</td>
     </tr>
-  `).join('') || '<tr><td colspan="5" style="color:var(--coffee-soft);">ยังไม่มีออเดอร์ในเดือนนี้</td></tr>';
+  `).join('') || '<tr><td colspan="5" style="color:var(--coffee-soft);">ไม่มีออเดอร์ที่ยังไม่ถูกเก็บถาวรในเดือนนี้</td></tr>';
 
   // การ์ดสรุปรายเดือน แตะเพื่อขยายดูยอดขายรายวันในเดือนนั้น พร้อม % เติบโตเทียบเดือนก่อนหน้า
   document.getElementById('summaryMonthlyList').innerHTML = monthEntries.map(([key,m],idx)=>{
     const prevEntry = monthEntries[idx+1]; // ถัดไปในลิสต์ (เรียงใหม่ไปเก่า) คือเดือนก่อนหน้าตามเวลาจริง
     const prevTotal = prevEntry ? prevEntry[1].total : 0;
     const pct = prevTotal>0 ? ((m.total-prevTotal)/prevTotal*100) : (m.total>0 ? Infinity : 0);
-    const dayGroups = orders.filter(o=>monthKeyOf(new Date(o.time))===key).reduce((acc,o)=>{
-      const dKey = new Date(o.time).toLocaleDateString('th-TH');
-      if(!acc[dKey]) acc[dKey] = {count:0,total:0,profit:0,ts:new Date(o.time).setHours(0,0,0,0)};
-      acc[dKey].count++; acc[dKey].total+=o.total; acc[dKey].profit+=orderProfit(o);
-      return acc;
-    },{});
-    const dayList = Object.entries(dayGroups).sort((a,b)=>b[1].ts-a[1].ts);
+    const dayList = Object.entries(combinedByDay)
+      .filter(([iso])=>iso.slice(0,7)===key)
+      .sort((a,b)=>b[1].ts-a[1].ts);
     return `<div class="month-card" id="monthCard-${key}">
       <div class="month-card-head" onclick="toggleMonthCard('${key}')">
         <div class="month-card-title"><span class="chev">▶</span> ${m.label}</div>
@@ -1174,7 +1302,7 @@ async function renderSummaryTab(){
         <div class="table-scroll">
           <table class="summary-table">
             <thead><tr><th>วันที่</th><th>จำนวนออเดอร์</th><th>ยอดขาย</th><th>กำไรโดยประมาณ</th></tr></thead>
-            <tbody>${dayList.map(([label,d])=>`<tr><td>${label}</td><td>${d.count}</td><td>${money(d.total)}</td><td>${money(d.profit)}</td></tr>`).join('')}</tbody>
+            <tbody>${dayList.map(([iso,d])=>`<tr><td>${dayLabelFromIso(iso)}</td><td>${d.count}</td><td>${money(d.total)}</td><td>${money(d.profit)}</td></tr>`).join('')}</tbody>
           </table>
         </div>
       </div>
@@ -1184,6 +1312,7 @@ async function renderSummaryTab(){
 async function exportSalesExcel(){
   if(typeof XLSX==='undefined'){ toast('โหลดไลบรารี Excel ไม่สำเร็จ ลองใหม่อีกครั้ง'); return; }
   const orders = await fetchOrders();
+  const archived = await fetchArchivedDaySummaries();
   const ordersSheet = orders.map(o=>({
     'เลขที่ออเดอร์':o.id, 'วันเวลา':new Date(o.time).toLocaleString('th-TH'),
     'ช่องทาง':o.channel==='pos'?'หน้าร้าน':'ออนไลน์', 'ชื่อลูกค้า':o.name, 'เบอร์โทร':o.phone,
@@ -1191,19 +1320,36 @@ async function exportSalesExcel(){
     'รายการ':o.items.map(i=>`${i.name} x${i.qty}${i.toppings.length?' ('+i.toppings.join(', ')+')':''}`).join(', '),
     'ยอดรวม':o.total, 'กำไรโดยประมาณ':orderProfit(o), 'สถานะ':o.status
   }));
-  const byDay={}, byWeek={}, byMonth={}, byYear={};
+
+  // รวมยอดขายรายวันจากออเดอร์ที่ยังอยู่ในระบบ + ยอดที่เก็บถาวรไปแล้ว ก่อนคำนวณสรุปรายสัปดาห์/รายเดือน/รายปี
+  const combinedByDay = {};
+  Object.entries(archived).forEach(([iso,v])=>{
+    const [y,m,d] = iso.split('-').map(Number);
+    combinedByDay[iso] = {count:v.count||0, total:v.total||0, profit:v.profit||0, ts:new Date(y,m-1,d).getTime()};
+  });
   orders.filter(o=>o.status!=='cancelled').forEach(o=>{
     const d = new Date(o.time);
-    const dKey = d.toLocaleDateString('th-TH');
-    const wKey = startOfWeek(d).toLocaleDateString('th-TH')+' (สัปดาห์)';
-    const mKey = monthKeyOf(d);
-    const yKey = d.getFullYear();
-    [[byDay,dKey],[byWeek,wKey],[byYear,yKey]].forEach(([obj,key])=>{
-      if(!obj[key]) obj[key] = {count:0,total:0,profit:0};
-      obj[key].count++; obj[key].total+=o.total; obj[key].profit+=orderProfit(o);
-    });
-    if(!byMonth[mKey]) byMonth[mKey] = {count:0,total:0,profit:0,label:monthLabelOf(d),ts:new Date(d.getFullYear(),d.getMonth(),1).getTime()};
-    byMonth[mKey].count++; byMonth[mKey].total+=o.total; byMonth[mKey].profit+=orderProfit(o);
+    const iso = isoDay(d);
+    if(!combinedByDay[iso]) combinedByDay[iso] = {count:0,total:0,profit:0,ts:new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()};
+    combinedByDay[iso].count++; combinedByDay[iso].total+=o.total; combinedByDay[iso].profit+=orderProfit(o);
+  });
+
+  const byDay={}, byWeek={}, byMonth={}, byYear={};
+  Object.entries(combinedByDay).forEach(([iso,v])=>{
+    const [y,m,d] = iso.split('-').map(Number);
+    const dateObj = new Date(y,m-1,d);
+    const dKey = dateObj.toLocaleDateString('th-TH');
+    const wKey = startOfWeek(dateObj).toLocaleDateString('th-TH')+' (สัปดาห์)';
+    const mKey = iso.slice(0,7);
+    const yKey = y;
+    if(!byDay[dKey]) byDay[dKey] = {count:0,total:0,profit:0};
+    byDay[dKey].count+=v.count; byDay[dKey].total+=v.total; byDay[dKey].profit+=v.profit;
+    if(!byWeek[wKey]) byWeek[wKey] = {count:0,total:0,profit:0};
+    byWeek[wKey].count+=v.count; byWeek[wKey].total+=v.total; byWeek[wKey].profit+=v.profit;
+    if(!byYear[yKey]) byYear[yKey] = {count:0,total:0,profit:0};
+    byYear[yKey].count+=v.count; byYear[yKey].total+=v.total; byYear[yKey].profit+=v.profit;
+    if(!byMonth[mKey]) byMonth[mKey] = {count:0,total:0,profit:0,label:monthLabelOf(new Date(y,m-1,1)),ts:new Date(y,m-1,1).getTime()};
+    byMonth[mKey].count+=v.count; byMonth[mKey].total+=v.total; byMonth[mKey].profit+=v.profit;
   });
   const toRows = obj => Object.entries(obj).map(([k,v])=>({'ช่วงเวลา':k,'จำนวนออเดอร์':v.count,'ยอดขาย':v.total,'กำไรโดยประมาณ':v.profit}));
   // ตารางสรุปรายเดือน เรียงเก่า→ใหม่ พร้อมยอดรวมและ % เติบโตเทียบเดือนก่อนหน้า
@@ -1216,7 +1362,7 @@ async function exportSalesExcel(){
   });
   monthRows.push({'เดือน':'รวมทั้งหมด', 'จำนวนออเดอร์':grandCount, 'ยอดขาย':grandTotal, 'กำไรโดยประมาณ':grandProfit, '% เติบโตจากเดือนก่อน':''});
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersSheet), 'ออเดอร์ทั้งหมด');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersSheet), 'ออเดอร์ที่ยังอยู่ในระบบ');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthRows), 'สรุปรายเดือน');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(toRows(byDay)), 'สรุปรายวัน');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(toRows(byWeek)), 'สรุปรายสัปดาห์');
