@@ -372,6 +372,10 @@ textarea{resize:vertical;min-height:70px;}
           <div class="cart-summary" id="posSummaryBox" style="display:none;margin-top:10px;">
             <div class="row"><span>ยอดสินค้า</span><span id="posSubtotal">฿0</span></div>
             <div class="row total"><span>รวมทั้งสิ้น</span><span id="posTotal">฿0</span></div>
+            <div class="field" style="margin-top:10px;">
+              <label style="font-size:0.8rem;">📝 โน้ตเพิ่มเติม (ถ้าลูกค้าสั่งอะไรนอกเหนือจากเมนู)</label>
+              <input type="text" id="posOrderNote" placeholder="เช่น ไม่ใส่น้ำแข็ง, หวานน้อย, ห่อแยก">
+            </div>
             <button class="btn btn-primary" style="justify-content:center;margin-top:6px;" onclick="posGoToPayment()">ไปหน้าชำระเงิน</button>
             <button class="mini-btn danger" style="margin-top:6px;" onclick="posClearCart()">ล้างรายการ</button>
           </div>
@@ -1360,7 +1364,7 @@ function closePOS(){
   document.getElementById('posOverlay').classList.remove('open');
 }
 /* แท็บที่พนักงานขาย (staff) เข้าไม่ได้เลย — เห็นได้เฉพาะเจ้าของ (owner) */
-const OWNER_ONLY_TABS = ['money','menu','promo','ingredients','settings'];
+const OWNER_ONLY_TABS = ['summary','money','menu','promo','ingredients','settings'];
 
 async function tryAdminLogin(){
   const email = document.getElementById('adminEmail').value.trim();
@@ -1505,7 +1509,7 @@ function posChangeQty(lineId, delta){
   if(line.qty<=0) state.posCart = state.posCart.filter(l=>l.lineId!==lineId);
   renderPOSCart();
 }
-function posClearCart(){ state.posCart=[]; renderPOSCart(); }
+function posClearCart(){ state.posCart=[]; renderPOSCart(); document.getElementById('posOrderNote').value=''; }
 function posCartTotals(){
   const subtotal = state.posCart.reduce((s,l)=>{
     const toppingSum = l.toppings.reduce((a,t)=>a+t.price,0);
@@ -1572,7 +1576,8 @@ async function posCompletePayment(){
     id: 'RK'+Date.now().toString().slice(-8),
     time: new Date().toISOString(),
     name: 'ลูกค้าหน้าร้าน', phone: '-',
-    fulfil: 'onsite', channel:'pos', paymentMethod: state.posPayMethod, address:'', note:'',
+    fulfil: 'onsite', channel:'pos', paymentMethod: state.posPayMethod,
+    address:'', note: document.getElementById('posOrderNote').value.trim(),
     items: state.posCart.map(l=>({name:l.name, qty:l.qty, price:l.price, cost:l.cost, toppings:l.toppings.map(t=>t.name)})),
     subtotal: t.subtotal, delivery:0, total: t.total,
     slip: null, slipLink:'', status:'preparing'
@@ -1582,6 +1587,7 @@ async function posCompletePayment(){
   persistStock('menu'); persistStock('promo');
   document.getElementById('posOrderIdOut').textContent = order.id;
   state.posCart = [];
+  document.getElementById('posOrderNote').value = '';
   document.getElementById('posStep2').style.display='none';
   document.getElementById('posStep3').style.display='block';
   toast('บันทึกการขายหน้าร้านเรียบร้อย');
@@ -1817,19 +1823,34 @@ async function renderOrdersTab(ordersOverride){
   const todayStr = new Date().toDateString();
   const todayOrders = orders.filter(o=> new Date(o.time).toDateString()===todayStr && o.status!=='cancelled');
   const todayRevenue = todayOrders.reduce((s,o)=>s+o.total,0);
-  const todayProfit = todayOrders.reduce((s,o)=>{
-    return s + o.items.reduce((a,it)=>{
-      const ref = allItems().find(x=>x.name===it.name);
-      const cost = ref ? menuItemCost(ref) : 0;
-      return a + (it.price - cost) * it.qty;
+  const isOwner = state.role==='owner';
+  if(isOwner){
+    const todayProfit = todayOrders.reduce((s,o)=>{
+      return s + o.items.reduce((a,it)=>{
+        const ref = allItems().find(x=>x.name===it.name);
+        const cost = ref ? menuItemCost(ref) : 0;
+        return a + (it.price - cost) * it.qty;
+      },0);
     },0);
-  },0);
-  statsBox.innerHTML = `
-    <div class="stat-card"><b>${todayOrders.length}</b><span>ออเดอร์วันนี้</span></div>
-    <div class="stat-card"><b>${money(todayRevenue)}</b><span>ยอดขายวันนี้</span></div>
-    <div class="stat-card"><b>${money(todayProfit)}</b><span>กำไรโดยประมาณวันนี้</span></div>
-    <div class="stat-card"><b>${orders.length}</b><span>ออเดอร์ทั้งหมด</span></div>
-  `;
+    const todayCash = todayOrders.filter(o=>o.paymentMethod==='cash').reduce((s,o)=>s+o.total,0);
+    const todayTransfer = todayOrders.filter(o=>o.paymentMethod==='transfer').reduce((s,o)=>s+o.total,0);
+    statsBox.innerHTML = `
+      <div class="stat-card"><b>${todayOrders.length}</b><span>ออเดอร์วันนี้</span></div>
+      <div class="stat-card"><b>${money(todayRevenue)}</b><span>ยอดขายวันนี้</span></div>
+      <div class="stat-card"><b>${money(todayProfit)}</b><span>กำไรโดยประมาณวันนี้</span></div>
+      <div class="stat-card"><b>${money(todayCash)} / ${money(todayTransfer)}</b><span>วันนี้ เงินสด / เงินโอน</span></div>
+    `;
+  } else {
+    /* พนักงานไม่เห็นกำไร — แสดงยอดรวม + แยกเงินสด/เงินโอน แทน (ใช้กระทบยอดปิดกะ) */
+    const todayCash = todayOrders.filter(o=>o.paymentMethod==='cash').reduce((s,o)=>s+o.total,0);
+    const todayTransfer = todayOrders.filter(o=>o.paymentMethod==='transfer').reduce((s,o)=>s+o.total,0);
+    statsBox.innerHTML = `
+      <div class="stat-card"><b>${todayOrders.length}</b><span>ออเดอร์วันนี้</span></div>
+      <div class="stat-card"><b>${money(todayRevenue)}</b><span>ยอดขายรวมวันนี้</span></div>
+      <div class="stat-card"><b>${money(todayCash)}</b><span>ยอดเงินสดวันนี้</span></div>
+      <div class="stat-card"><b>${money(todayTransfer)}</b><span>ยอดเงินโอนวันนี้</span></div>
+    `;
+  }
   const list = document.getElementById('ordersList');
   if(orders.length===0){ list.innerHTML = '<p style="color:var(--coffee-soft);font-size:0.9rem;">ยังไม่มีออเดอร์เข้ามา</p>'; return; }
   list.innerHTML = orders.map(o=>{
