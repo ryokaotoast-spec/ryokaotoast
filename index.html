@@ -764,11 +764,13 @@ async function loadAll(){
 async function persist(key){
   try{
     await window.storage.set('shop:'+key, JSON.stringify(state[key]), true);
+    return true;
   }catch(e){
     console.warn('save failed, retrying', e);
     try{
       await new Promise(r=>setTimeout(r,500));
       await window.storage.set('shop:'+key, JSON.stringify(state[key]), true);
+      return true;
     }catch(e2){
       console.warn('save failed again', e2);
       const sizeKB = Math.round(JSON.stringify(state[key]).length/1024);
@@ -777,6 +779,7 @@ async function persist(key){
       } else {
         toast(`⚠️ บันทึกข้อมูล "${key}" ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง (เช็คอินเทอร์เน็ต)`);
       }
+      return false;
     }
   }
 }
@@ -1368,17 +1371,22 @@ async function tryAdminLogin(){
     const cred = await firebase.auth().signInWithEmailAndPassword(email, pass);
     state.adminOn = true;
     state.role = (cred.user.uid === OWNER_UID) ? 'owner' : 'staff';
-    showAdminPanel();
+    await showAdminPanel();
   }catch(e){
     console.warn('login failed', e);
     errBox.textContent = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง ลองใหม่อีกครั้ง';
     errBox.style.display='block';
   }
 }
-function showAdminPanel(){
+async function showAdminPanel(){
   document.getElementById('adminLogin').style.display='none';
   document.getElementById('adminPanel').style.display='block';
   document.getElementById('logoutBtn').style.display='flex';
+
+  /* โหลดข้อมูลจริงจาก Firestore ใหม่ตรงนี้เสมอ — ตอนเปิดหน้าเว็บครั้งแรกก่อนล็อกอิน
+     Firestore Rules จะปฏิเสธการอ่านทุกอย่าง (เพราะยังไม่ auth) จึงต้องโหลดซ้ำอีกทีหลังล็อกอินสำเร็จ
+     ไม่งั้นจะเห็นแต่ค่าตั้งต้นในโค้ด ไม่ใช่ข้อมูลจริงที่เคยบันทึกไว้ */
+  await loadAll();
 
   /* ซ่อนแท็บที่พนักงานไม่ควรเห็นเลย — การป้องกันจริงอยู่ที่ Firestore Rules
      ส่วนนี้แค่ทำให้ UI ไม่โชว์ปุ่มให้กดเข้าไปเฉยๆ */
@@ -1396,6 +1404,7 @@ function showAdminPanel(){
 }
 function logoutAdmin(){
   firebase.auth().signOut();
+  clearInterval(state._ordersPoll);
   state.adminOn = false;
   state.role = null;
   document.getElementById('adminPanel').style.display='none';
@@ -1410,6 +1419,12 @@ function switchAdminTab(tab){
   ['orders','summary','money','menu','promo','ingredients','settings'].forEach(t=>{
     document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)).style.display = (t===tab)?'block':'none';
   });
+  /* รีเฟรชแท็บออเดอร์อัตโนมัติทุก 5 วิ ระหว่างเปิดค้างไว้ (เดิมต้องสลับแท็บออก-เข้าเองถึงจะเห็นออเดอร์ใหม่)
+     เคลียร์ตัวจับเวลาเก่าทิ้งก่อนเสมอ กันไม่ให้เกิดหลายตัวซ้อนกันตอนสลับแท็บไปมาบ่อยๆ */
+  clearInterval(state._ordersPoll);
+  if(tab==='orders'){
+    state._ordersPoll = setInterval(()=>{ if(state.adminOn) renderOrdersTab(); }, 5000);
+  }
   if(tab==='orders') renderOrdersTab();
   if(tab==='summary') renderSummaryTab();
   if(tab==='money') renderMoneyTab();
@@ -2103,8 +2118,8 @@ async function saveSettings(){
   state.settings.openingTransfer = Number(document.getElementById('setOpeningTransfer').value)||0;
   state.settings.gsheetUrl = document.getElementById('setGsheetUrl').value.trim();
   state.settings.gsheetSecret = document.getElementById('setGsheetSecret').value.trim();
-  await persist('settings');
-  toast('บันทึกการตั้งค่าเรียบร้อยแล้ว');
+  const ok = await persist('settings');
+  if(ok) toast('บันทึกการตั้งค่าเรียบร้อยแล้ว');
 }
 async function changeMyPassword(){
   const newPass = document.getElementById('setNewPass').value;
