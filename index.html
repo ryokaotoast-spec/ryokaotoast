@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth-compat.js"></script>
 <script>
 /* =========================================================
    FIREBASE BACKEND — แทนที่ระบบ window.storage เดิม (ซึ่งใช้ได้เฉพาะใน Claude)
@@ -23,6 +24,14 @@ const firebaseConfig = {
   messagingSenderId: "397116345274",
   appId: "1:397116345274:web:4f0da36c6d8f0b488e6b83"
 };
+/* =========================================================
+   OWNER_UID — ตัวบอกว่า "บัญชีไหนคือเจ้าของร้าน" (ที่เหลือถือเป็นพนักงาน)
+   วิธีหา: หลังสร้างบัญชีเจ้าของใน Firebase Console > Authentication > Users
+   แล้วให้คัดลอกค่าในคอลัมน์ "User UID" ของบัญชีนั้นมาแปะแทนที่ข้อความด้านล่างนี้
+   (ต้องแก้ตรงนี้ก่อนใช้งานจริง ไม่งั้นระบบจะถือว่าไม่มีใครเป็นเจ้าของเลย)
+========================================================= */
+const OWNER_UID = "FLBhkfaMuId8HAc7w0OrlPO6Bc93";
+
 try{
   firebase.initializeApp(firebaseConfig);
   const _db = firebase.firestore();
@@ -117,146 +126,16 @@ h1,h2,h3,.display{
 a{color:inherit;text-decoration:none;}
 button{font-family:inherit;cursor:pointer;border:none;background:none;}
 img{max-width:100%;display:block;}
-.wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
 
-/* ---------- top bar ---------- */
-header.site{
-  position:sticky;top:0;z-index:40;
-  background:rgba(255,247,234,0.92);
-  backdrop-filter:blur(6px);
-  border-bottom:1px solid var(--line);
-}
-.topbar{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:14px 0;gap:16px;
-}
-.brand{display:flex;align-items:center;gap:10px;font-family:'Chonburi',cursive;font-size:1.25rem;}
-.brand .mark{
-  width:40px;height:40px;border-radius:50%;
-  background:var(--crust);color:var(--white);
-  display:flex;align-items:center;justify-content:center;
-  font-size:1.2rem;box-shadow:var(--shadow);
-}
-.status-pill{
-  display:inline-flex;align-items:center;gap:6px;
-  background:var(--cream-2);border:1px solid var(--line);
-  padding:6px 14px;border-radius:999px;font-size:0.82rem;color:var(--coffee-soft);
-}
-.status-pill .dot{width:8px;height:8px;border-radius:50%;background:#5B8C5A;}
-.status-pill.closed .dot{background:var(--berry);}
-.cart-btn{
-  position:relative;display:flex;align-items:center;gap:8px;
-  background:var(--coffee);color:var(--white);
-  padding:10px 18px;border-radius:999px;font-size:0.92rem;font-weight:500;
-  box-shadow:var(--shadow);
-}
-.cart-btn .count{
-  background:var(--butter);color:var(--coffee);
-  min-width:20px;height:20px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:0.72rem;font-weight:700;padding:0 4px;
-}
-
-/* ---------- hero ---------- */
-.hero{
-  padding:64px 0 40px;
-  display:grid;grid-template-columns:1.1fr 0.9fr;gap:40px;align-items:center;
-}
-.hero-copy .eyebrow{color:var(--crust-dark);font-weight:600;font-size:0.95rem;margin-bottom:10px;}
-.hero-copy h1{font-size:clamp(2.2rem,4.4vw,3.4rem);}
-.hero-copy p.lead{margin-top:16px;max-width:46ch;color:var(--coffee-soft);font-size:1.05rem;}
-.hero-actions{display:flex;gap:12px;margin-top:26px;flex-wrap:wrap;}
 .btn{
   padding:13px 26px;border-radius:999px;font-weight:600;font-size:0.95rem;
   display:inline-flex;align-items:center;gap:8px;transition:transform .15s ease;
 }
 .btn:active{transform:scale(0.97);}
 .btn-primary{background:var(--crust);color:var(--white);box-shadow:0 8px 18px rgba(224,138,44,0.35);}
-.btn-ghost{background:transparent;border:1.5px solid var(--coffee);color:var(--coffee);}
 .btn-berry{background:var(--berry);color:var(--white);}
 .btn-outline{border:1.5px solid var(--line);color:var(--coffee-soft);}
-.hero-facts{display:flex;gap:22px;margin-top:30px;flex-wrap:wrap;}
-.hero-facts .fact b{display:block;font-size:1.05rem;}
-.hero-facts .fact span{font-size:0.82rem;color:var(--coffee-soft);}
-.hero-art{
-  position:relative;background:var(--cream-2);border-radius:var(--radius-lg);
-  padding:34px;box-shadow:var(--shadow);border:1px solid var(--line);
-}
-.hero-art .slice{
-  width:100%;aspect-ratio:1/1;border-radius:22px;
-  background:
-    radial-gradient(circle at 30% 30%, #FFD98A 0%, #F6CE73 38%, transparent 39%),
-    linear-gradient(135deg, #F1B25C, var(--crust) 60%, var(--crust-dark));
-  display:flex;align-items:center;justify-content:center;
-  font-family:'Chonburi',cursive;color:rgba(255,255,255,0.9);font-size:1.1rem;text-align:center;padding:20px;
-}
-.hero-art .caption{margin-top:16px;text-align:center;color:var(--coffee-soft);font-size:0.85rem;}
-
-/* ---------- section heads ---------- */
-.section{padding:54px 0;}
-.section-head{margin-bottom:28px;}
-.section-head h2{font-size:1.9rem;}
-.section-head p{color:var(--coffee-soft);margin-top:8px;max-width:56ch;}
-
-/* ---------- category chips ---------- */
-.chip-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px;}
-.chip{
-  padding:9px 18px;border-radius:999px;border:1.5px solid var(--line);
-  background:var(--white);font-size:0.88rem;color:var(--coffee-soft);font-weight:500;
-}
-.chip.active{background:var(--coffee);color:var(--white);border-color:var(--coffee);}
-
-/* ---------- menu grid ---------- */
-.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px;}
-.menu-card{
-  background:var(--white);border:1px solid var(--line);border-radius:var(--radius-md);
-  padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:var(--shadow);
-}
-.menu-card .thumb{
-  height:104px;border-radius:12px;
-  background:linear-gradient(135deg,var(--butter),var(--crust));
-  display:flex;align-items:center;justify-content:center;color:var(--white);
-  font-family:'Chonburi',cursive;font-size:0.95rem;text-align:center;padding:8px;
-}
-.menu-card h3{font-family:'Prompt',sans-serif;font-weight:600;font-size:1.02rem;}
-.menu-card .desc{font-size:0.82rem;color:var(--coffee-soft);min-height:32px;}
-.menu-card .row{display:flex;align-items:center;justify-content:space-between;margin-top:auto;}
-.menu-card .price{font-weight:700;font-size:1.08rem;color:var(--crust-dark);}
-.menu-card .stock{font-size:0.76rem;color:var(--coffee-soft);}
-.menu-card .stock.low{color:var(--berry);font-weight:600;}
-.add-btn{
-  width:38px;height:38px;border-radius:50%;background:var(--crust);color:var(--white);
-  font-size:1.3rem;display:flex;align-items:center;justify-content:center;
-  box-shadow:0 6px 14px rgba(224,138,44,0.35);
-}
-.add-btn:disabled{background:#D8CBB4;box-shadow:none;cursor:not-allowed;}
-.sold-out-tag{
-  align-self:flex-start;background:var(--berry);color:#fff;font-size:0.7rem;
-  padding:3px 10px;border-radius:999px;font-weight:600;
-}
-
-/* ---------- steps ---------- */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;}
-.step{background:var(--white);border:1px solid var(--line);border-radius:var(--radius-md);padding:24px;box-shadow:var(--shadow);}
-.step .num{
-  width:34px;height:34px;border-radius:50%;background:var(--coffee);color:var(--white);
-  display:flex;align-items:center;justify-content:center;font-weight:700;margin-bottom:14px;font-size:0.95rem;
-}
-.step h3{font-size:1.05rem;font-family:'Prompt',sans-serif;font-weight:600;margin-bottom:6px;}
-.step p{font-size:0.88rem;color:var(--coffee-soft);}
-
-/* ---------- info split ---------- */
-.info-split{display:grid;grid-template-columns:1fr 1fr;gap:22px;}
-.info-card{background:var(--cream-2);border:1px solid var(--line);border-radius:var(--radius-md);padding:26px;}
-.info-card h3{font-size:1.15rem;margin-bottom:14px;}
-.info-card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;}
-.info-card li{display:flex;gap:10px;font-size:0.92rem;color:var(--coffee-soft);}
-.info-card li b{color:var(--coffee);font-weight:600;}
-
-footer.site{border-top:1px solid var(--line);padding:30px 0;margin-top:20px;}
-.foot-row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;align-items:center;font-size:0.85rem;color:var(--coffee-soft);}
-.foot-links{display:flex;gap:16px;}
 
 /* ---------- drawer & modals ---------- */
 .overlay{
@@ -340,11 +219,6 @@ textarea{resize:vertical;min-height:70px;}
 }
 
 /* ---------- admin ---------- */
-.admin-fab{
-  position:fixed;bottom:18px;left:18px;z-index:30;
-  background:var(--coffee);color:var(--cream);width:44px;height:44px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:var(--shadow);opacity:0.55;
-}
 .admin-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0;border-bottom:1px solid var(--line);padding-bottom:12px;}
 .admin-tab{padding:8px 16px;border-radius:999px;font-size:0.85rem;font-weight:600;color:var(--coffee-soft);background:var(--cream-2);}
 .admin-tab.active{background:var(--coffee);color:var(--white);}
@@ -380,13 +254,6 @@ textarea{resize:vertical;min-height:70px;}
   opacity:0;transform:translateY(10px);transition:all .25s ease;pointer-events:none;
 }
 .toast-msg.show{opacity:1;transform:translateY(0);}
-
-/* ---------- menu image ---------- */
-.menu-card .thumb.has-img{background:none;padding:0;overflow:hidden;}
-.menu-card .thumb.has-img img{width:100%;height:100%;object-fit:cover;border-radius:12px;}
-.img-cell{display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:90px;}
-.img-cell img{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line);}
-.img-cell input[type=text]{font-size:0.72rem;padding:5px 7px;}
 
 /* ---------- topping picker ---------- */
 .topping-list{display:flex;flex-direction:column;gap:8px;margin:14px 0;}
@@ -426,7 +293,6 @@ textarea{resize:vertical;min-height:70px;}
 .pos-pay-toggle{display:flex;gap:10px;margin:14px 0;}
 .pos-badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:0.7rem;font-weight:700;margin-left:6px;}
 .pos-badge.pos{background:#FDECC8;color:#8A5A00;}
-.pos-badge.online{background:#DCEBFB;color:#1E5E9E;}
 .pay-badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:0.7rem;font-weight:700;margin-left:6px;background:#E1F1DD;color:#2E6B29;}
 
 /* ---------- improved order card ---------- */
@@ -459,12 +325,8 @@ textarea{resize:vertical;min-height:70px;}
   .pos-wrap{grid-template-columns:1fr;}
   .pos-cart{position:static;}
   .pos-configure{position:static;}
-  .hero{grid-template-columns:1fr;padding-top:34px;}
-  .steps{grid-template-columns:1fr;}
-  .info-split{grid-template-columns:1fr;}
 }
 @media(max-width:480px){
-  .wrap{padding:0 16px;}
   .field-row{grid-template-columns:1fr;}
   .panel{padding:18px;}
   .modal-box{padding:16px;}
@@ -543,6 +405,25 @@ textarea{resize:vertical;min-height:70px;}
   </div>
 </div>
 
+<!-- ============ สูตรเมนู (ผูกเมนูกับวัตถุดิบ ให้ต้นทุนคำนวณอัตโนมัติ) ============ -->
+<div class="overlay center" id="recipeOverlay">
+  <div class="modal-box" style="max-width:480px;">
+    <div class="modal-head">
+      <h2 style="font-size:1.1rem;">🧪 สูตรของ "<span id="recipeItemName"></span>"</h2>
+      <button class="close-x" onclick="closeRecipeEditor()">✕</button>
+    </div>
+    <p style="font-size:0.8rem;color:var(--coffee-soft);margin-bottom:10px;">ติ๊กวัตถุดิบที่ใช้ในเมนูนี้ แล้วกรอกปริมาณที่ใช้ต่อ 1 ชิ้น (หน่วยเดียวกับที่ตั้งไว้ในหน้าวัตถุดิบ) — ต้นทุนจะคำนวณจากราคาซื้อวัตถุดิบปัจจุบันให้อัตโนมัติทุกครั้ง</p>
+    <div id="recipeIngList" style="max-height:50vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:0.85rem;">ต้นทุนวัตถุดิบรวมจากสูตร: <b id="recipeLiveCost">฿0</b></div>
+      <div style="display:flex;gap:8px;">
+        <button class="mini-btn" onclick="clearRecipe()">ล้างสูตร (ใช้ต้นทุนกรอกเอง)</button>
+        <button class="btn btn-primary" onclick="saveRecipe()">บันทึกสูตร</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ หน้าหลังร้าน (Backoffice) — ไฟล์นี้แยกต่างหากจากหน้าสั่งซื้อออนไลน์ของลูกค้าโดยสมบูรณ์ ============ -->
 <div class="admin-page-wrap" id="adminOverlay">
   <div class="modal-box wide" style="margin:0;">
@@ -553,10 +434,11 @@ textarea{resize:vertical;min-height:70px;}
 
     <div id="adminLogin" class="login-box">
       <div class="mark">🔑</div>
-      <p style="color:var(--coffee-soft);font-size:0.9rem;margin-bottom:14px;">กรอกรหัสเจ้าของร้านเพื่อเข้าจัดการออเดอร์และเมนู</p>
-      <div class="field"><input type="text" id="adminPass" placeholder="รหัสผ่าน"></div>
+      <p style="color:var(--coffee-soft);font-size:0.9rem;margin-bottom:14px;">เข้าสู่ระบบด้วยอีเมล+รหัสผ่านของเจ้าของร้านหรือพนักงาน</p>
+      <div class="field"><input type="email" id="adminEmail" placeholder="อีเมล" autocomplete="username"></div>
+      <div class="field"><input type="password" id="adminPass" placeholder="รหัสผ่าน" autocomplete="current-password"></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="tryAdminLogin()">เข้าสู่ระบบ</button>
-      <p id="adminLoginErr" style="color:var(--berry);font-size:0.82rem;margin-top:10px;display:none;">รหัสไม่ถูกต้อง ลองใหม่อีกครั้ง</p>
+      <p id="adminLoginErr" style="color:var(--berry);font-size:0.82rem;margin-top:10px;display:none;">อีเมลหรือรหัสผ่านไม่ถูกต้อง ลองใหม่อีกครั้ง</p>
     </div>
 
     <div id="adminPanel" style="display:none;">
@@ -748,18 +630,10 @@ textarea{resize:vertical;min-height:70px;}
       <div class="admin-tab-panel" id="tabSettings" style="display:none;">
         <div class="field-row">
           <div class="field"><label>ชื่อร้าน</label><input type="text" id="setShopName"></div>
-          <div class="field"><label>อีเมลรับแจ้งออเดอร์</label><input type="text" id="setEmail"></div>
         </div>
         <div class="field-row">
           <div class="field"><label>เวลาเปิด จันทร์–ศุกร์</label><input type="text" id="setHoursWeekday"></div>
           <div class="field"><label>เวลาเปิด เสาร์–อาทิตย์</label><input type="text" id="setHoursWeekend"></div>
-        </div>
-        <div class="field"><label>ที่อยู่ร้าน</label><textarea id="setAddress"></textarea></div>
-        <div class="field-row">
-          <div class="field"><label>ค่าส่ง (บาท)</label><input type="number" id="setDeliveryFee"></div>
-          <div class="field"><label>สถานะร้าน</label>
-            <select id="setStoreOpen"><option value="open">เปิดรับออเดอร์</option><option value="closed">ปิดรับออเดอร์ชั่วคราว</option></select>
-          </div>
         </div>
         <div class="field-row">
           <div class="field"><label>💵 ทุนตั้งต้น — เงินสด (บาท)</label><input type="number" id="setOpeningCash"></div>
@@ -770,8 +644,12 @@ textarea{resize:vertical;min-height:70px;}
         <p style="font-size:0.78rem;color:var(--coffee-soft);margin:0 0 10px;">ถ้ากรอก URL ไว้ ทุกครั้งที่เก็บถาวรออเดอร์เก่า ระบบจะยิงข้อมูลไปเก็บสะสมในชีตนี้ด้วย (นอกจากไฟล์ Excel ที่ยังดาวน์โหลดในเครื่องเหมือนเดิมทุกครั้งเป็นข้อมูลสำรอง)</p>
         <div class="field"><label>Web App URL (จาก Google Apps Script)</label><input type="text" id="setGsheetUrl" placeholder="https://script.google.com/macros/s/xxxxx/exec"></div>
         <div class="field"><label>รหัสลับ (ต้องตรงกับที่ตั้งไว้ในสคริปต์)</label><input type="text" id="setGsheetSecret" placeholder="ตั้งรหัสอะไรก็ได้ กันคนอื่นแอบยิงข้อมูลเข้าชีต"></div>
-        <div class="field"><label>เปลี่ยนรหัสเจ้าของร้าน (เว้นว่างไว้ถ้าไม่เปลี่ยน)</label><input type="text" id="setNewPass" placeholder="รหัสใหม่"></div>
         <button class="btn btn-primary" onclick="saveSettings()">บันทึกการตั้งค่า</button>
+
+        <h3 style="font-size:0.95rem;margin:26px 0 4px;">🔑 เปลี่ยนรหัสผ่านของฉัน</h3>
+        <p style="font-size:0.78rem;color:var(--coffee-soft);margin:0 0 10px;">เปลี่ยนรหัสผ่านของบัญชีที่ล็อกอินอยู่ตอนนี้ (ถ้าล็อกอินมานานแล้วระบบอาจให้ออกจากระบบแล้วเข้าใหม่ก่อนเปลี่ยน — เป็นการป้องกันของ Firebase เอง)</p>
+        <div class="field"><label>รหัสผ่านใหม่</label><input type="password" id="setNewPass" placeholder="อย่างน้อย 6 ตัวอักษร"></div>
+        <button class="mini-btn primary" onclick="changeMyPassword()">เปลี่ยนรหัสผ่าน</button>
       </div>
     </div>
   </div>
@@ -784,22 +662,22 @@ textarea{resize:vertical;min-height:70px;}
    DATA MODEL
 ========================================================= */
 const DEFAULT_MENU = [
-  {id:'m1',name:'เนยนม',cat:'toast',stock:20,price:19,costFood:4.01,costPack:1.46,desc:'เนยนมหอมมันคลาสสิก'},
-  {id:'m2',name:'เนยนมน้ำตาล',cat:'toast',stock:20,price:19,costFood:4.01,costPack:1.46,desc:'เนยนมโรยน้ำตาลกรอบ ๆ'},
-  {id:'m3',name:'เนยนมคาราเมล',cat:'toast',stock:20,price:20,costFood:4.50,costPack:1.46,desc:'ราดซอสคาราเมลหวานมัน'},
-  {id:'m4',name:'โอวัลติน',cat:'toast',stock:15,price:25,costFood:8.41,costPack:1.46,desc:'โรยผงโอวัลตินเข้มข้น'},
-  {id:'m5',name:'ช็อกโกแลต',cat:'toast',stock:15,price:25,costFood:5.86,costPack:1.46,desc:'แยมช็อกโกแลตเนื้อเข้ม'},
-  {id:'m6',name:'สตรอว์เบอร์รี่',cat:'toast',stock:15,price:25,costFood:4.53,costPack:1.46,desc:'แยมสตรอว์เบอร์รี่หวานอมเปรี้ยว'},
-  {id:'m7',name:'วิปเนยนม',cat:'whip',stock:12,price:35,costFood:8.83,costPack:1.46,desc:'ท็อปวิปครีมฟูนุ่ม'},
-  {id:'m8',name:'วิปคอนเฟล็ก',cat:'whip',stock:12,price:40,costFood:9.38,costPack:1.46,desc:'วิปครีม โรยคอนเฟล็กกรอบ'},
-  {id:'m9',name:'วิปกล้วยช็อก',cat:'whip',stock:10,price:40,costFood:0,costPack:1.46,desc:'กล้วยหอมตัดกับช็อกโกแลต'},
-  {id:'m10',name:'วิปโอริโอ้',cat:'whip',stock:10,price:40,costFood:12.67,costPack:1.46,desc:'วิปครีมกับคุกกี้โอริโอ้'},
-  {id:'m11',name:'วิปสตรอว์เบอร์รี่',cat:'whip',stock:10,price:40,costFood:10.48,costPack:1.46,desc:'วิปครีมกับแยมสตรอว์เบอร์รี่'},
+  {id:'m1',name:'เนยนม',cat:'toast',stock:20,price:19,costFood:4.01,costPack:1.46,desc:'เนยนมหอมมันคลาสสิก',recipe:[]},
+  {id:'m2',name:'เนยนมน้ำตาล',cat:'toast',stock:20,price:19,costFood:4.01,costPack:1.46,desc:'เนยนมโรยน้ำตาลกรอบ ๆ',recipe:[]},
+  {id:'m3',name:'เนยนมคาราเมล',cat:'toast',stock:20,price:20,costFood:4.50,costPack:1.46,desc:'ราดซอสคาราเมลหวานมัน',recipe:[]},
+  {id:'m4',name:'โอวัลติน',cat:'toast',stock:15,price:25,costFood:8.41,costPack:1.46,desc:'โรยผงโอวัลตินเข้มข้น',recipe:[]},
+  {id:'m5',name:'ช็อกโกแลต',cat:'toast',stock:15,price:25,costFood:5.86,costPack:1.46,desc:'แยมช็อกโกแลตเนื้อเข้ม',recipe:[]},
+  {id:'m6',name:'สตรอว์เบอร์รี่',cat:'toast',stock:15,price:25,costFood:4.53,costPack:1.46,desc:'แยมสตรอว์เบอร์รี่หวานอมเปรี้ยว',recipe:[]},
+  {id:'m7',name:'วิปเนยนม',cat:'whip',stock:12,price:35,costFood:8.83,costPack:1.46,desc:'ท็อปวิปครีมฟูนุ่ม',recipe:[]},
+  {id:'m8',name:'วิปคอนเฟล็ก',cat:'whip',stock:12,price:40,costFood:9.38,costPack:1.46,desc:'วิปครีม โรยคอนเฟล็กกรอบ',recipe:[]},
+  {id:'m9',name:'วิปกล้วยช็อก',cat:'whip',stock:10,price:40,costFood:0,costPack:1.46,desc:'กล้วยหอมตัดกับช็อกโกแลต',recipe:[]},
+  {id:'m10',name:'วิปโอริโอ้',cat:'whip',stock:10,price:40,costFood:12.67,costPack:1.46,desc:'วิปครีมกับคุกกี้โอริโอ้',recipe:[]},
+  {id:'m11',name:'วิปสตรอว์เบอร์รี่',cat:'whip',stock:10,price:40,costFood:10.48,costPack:1.46,desc:'วิปครีมกับแยมสตรอว์เบอร์รี่',recipe:[]},
 ];
 const DEFAULT_PROMO = [
-  {id:'p1',name:'ปังแพ็คคู่',stock:10,price:65,costFood:20.02,costPack:1.46,desc:'เลือกได้ 2 หน้า คุ้มกว่าสั่งแยก'},
-  {id:'p2',name:'ปังวันทอง',stock:10,price:35,costFood:9.28,costPack:1.46,desc:'เมนูประจำวัน ราคาพิเศษ'},
-  {id:'p3',name:'เนยนมแพ็คคู่',stock:10,price:30,costFood:8.02,costPack:1.46,desc:'เนยนม 2 ชิ้น คู่หูสุดคุ้ม'},
+  {id:'p1',name:'ปังแพ็คคู่',stock:10,price:65,costFood:20.02,costPack:1.46,desc:'เลือกได้ 2 หน้า คุ้มกว่าสั่งแยก',recipe:[]},
+  {id:'p2',name:'ปังวันทอง',stock:10,price:35,costFood:9.28,costPack:1.46,desc:'เมนูประจำวัน ราคาพิเศษ',recipe:[]},
+  {id:'p3',name:'เนยนมแพ็คคู่',stock:10,price:30,costFood:8.02,costPack:1.46,desc:'เนยนม 2 ชิ้น คู่หูสุดคุ้ม',recipe:[]},
 ];
 const DEFAULT_TOPPINGS = [
   {id:'t1',name:'คอนเฟล็ก',price:5},
@@ -828,10 +706,8 @@ const DEFAULT_INGREDIENTS = [
   {id:'i17',name:'สติกเกอร์',buyPrice:12,buyQty:500,unit:'ดวง',usePerItem:1},
 ];
 const DEFAULT_SETTINGS = {
-  shopName:'Ryokao Toast', email:'ryokaotoast@gmail.com',
+  shopName:'Ryokao Toast',
   hoursWeekday:'15:00–22:00 น.', hoursWeekend:'11:00–22:00 น.',
-  address:'ใส่ที่อยู่ร้านจริงที่นี่ (แก้ได้ในหลังร้าน > ตั้งค่าร้าน)',
-  deliveryFee:20, storeOpen:'open', ownerPass:'ryokao2026',
   openingCash:0, openingTransfer:0,
   /* Google Sheets sync — ถ้ากรอก URL ไว้ ตอนเก็บถาวรจะยิงข้อมูลไปเก็บสะสมในชีตนี้ด้วย (นอกเหนือจากไฟล์ Excel สำรองในเครื่องที่ยังดาวน์โหลดตามปกติ) */
   gsheetUrl:'', gsheetSecret:''
@@ -841,7 +717,7 @@ const QR_IMAGE = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQY
 let state = {
   menu:[...DEFAULT_MENU], promo:[...DEFAULT_PROMO], toppings:[...DEFAULT_TOPPINGS],
   ingredients:[...DEFAULT_INGREDIENTS], settings:{...DEFAULT_SETTINGS},
-  cart:[], fulfil:'onsite', slipData:null, activeCat:'all', adminOn:false,
+  cart:[], fulfil:'onsite', slipData:null, activeCat:'all', adminOn:false, role:null,
   posCart:[], posPayMethod:'transfer', moneyLog:[],
   /* หมวดหมู่ที่ผู้ใช้กำหนดเอง — แยกชุดกันระหว่างรายจ่ายกับถอน-เติมทุน */
   expenseCats:['วัตถุดิบ','ค่าใช้จ่ายอื่น'],
@@ -1102,7 +978,7 @@ async function pushArchiveToGoogleSheet(oldOrders, oldMoney){
   const payload = {
     secret: state.settings.gsheetSecret || '',
     orders: oldOrders.filter(o=>o.status!=='cancelled').map(o=>({
-      id:o.id, time:o.time, channel:o.channel==='pos'?'หน้าร้าน':'ออนไลน์',
+      id:o.id, time:o.time, channel:'หน้าร้าน',
       name:o.name||'', phone:o.phone||'', fulfil:o.fulfil==='delivery'?'จัดส่ง':'หน้าร้าน',
       payMethod:o.paymentMethod==='cash'?'เงินสด':'โอนเงิน',
       itemsText:o.items.map(i=>`${i.name} x${i.qty}${i.toppings.length?' ('+i.toppings.join(', ')+')':''}`).join(', '),
@@ -1127,7 +1003,9 @@ async function pushArchiveToGoogleSheet(oldOrders, oldMoney){
 }
 
 async function archiveOldOrders(silent){
-
+  /* ไฟล์ Excel ที่ฟังก์ชันนี้สร้างมีคอลัมน์ "กำไรโดยประมาณ" ต่อออเดอร์ด้วย
+     จึงให้เจ้าของเท่านั้นเป็นคนกดเก็บถาวร กันพนักงานเห็นกำไรผ่านไฟล์ที่ดาวน์โหลดได้ */
+  if(state.role!=='owner'){ if(!silent) toast('ขั้นตอนนี้ให้เจ้าของร้านเป็นคนทำครับ'); return; }
   if(state._archiving) return;
   const orders = await fetchOrders();
   const moneyLog = await fetchMoneyLog();
@@ -1158,7 +1036,7 @@ async function archiveOldOrders(silent){
   try{
     const ordersSheet = oldOrders.map(o=>({
       'เลขที่ออเดอร์':o.id, 'วันเวลา':new Date(o.time).toLocaleString('th-TH'),
-      'ช่องทาง':o.channel==='pos'?'หน้าร้าน':'ออนไลน์', 'ชื่อลูกค้า':o.name, 'เบอร์โทร':o.phone,
+      'ช่องทาง':'หน้าร้าน', 'ชื่อลูกค้า':o.name, 'เบอร์โทร':o.phone,
       'รับสินค้า':o.fulfil==='delivery'?'จัดส่ง':'หน้าร้าน', 'วิธีชำระเงิน':o.paymentMethod==='cash'?'เงินสด':'โอนเงิน',
       'รายการ':o.items.map(i=>`${i.name} x${i.qty}${i.toppings.length?' ('+i.toppings.join(', ')+')':''}`).join(', '),
       'ยอดรวม':o.total, 'กำไรโดยประมาณ':orderProfit(o), 'สถานะ':o.status
@@ -1478,34 +1356,56 @@ function openPOS(){
 function closePOS(){
   document.getElementById('posOverlay').classList.remove('open');
 }
-function tryAdminLogin(){
-  const val = document.getElementById('adminPass').value;
-  if(val === state.settings.ownerPass){
+/* แท็บที่พนักงานขาย (staff) เข้าไม่ได้เลย — เห็นได้เฉพาะเจ้าของ (owner) */
+const OWNER_ONLY_TABS = ['money','menu','promo','ingredients','settings'];
+
+async function tryAdminLogin(){
+  const email = document.getElementById('adminEmail').value.trim();
+  const pass = document.getElementById('adminPass').value;
+  const errBox = document.getElementById('adminLoginErr');
+  errBox.style.display='none';
+  try{
+    const cred = await firebase.auth().signInWithEmailAndPassword(email, pass);
     state.adminOn = true;
-    document.getElementById('adminLoginErr').style.display='none';
+    state.role = (cred.user.uid === OWNER_UID) ? 'owner' : 'staff';
     showAdminPanel();
-  } else {
-    document.getElementById('adminLoginErr').style.display='block';
+  }catch(e){
+    console.warn('login failed', e);
+    errBox.textContent = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง ลองใหม่อีกครั้ง';
+    errBox.style.display='block';
   }
 }
 function showAdminPanel(){
   document.getElementById('adminLogin').style.display='none';
   document.getElementById('adminPanel').style.display='block';
   document.getElementById('logoutBtn').style.display='flex';
+
+  /* ซ่อนแท็บที่พนักงานไม่ควรเห็นเลย — การป้องกันจริงอยู่ที่ Firestore Rules
+     ส่วนนี้แค่ทำให้ UI ไม่โชว์ปุ่มให้กดเข้าไปเฉยๆ */
+  const isOwner = state.role === 'owner';
+  document.querySelectorAll('.admin-tab').forEach(b=>{
+    if(OWNER_ONLY_TABS.includes(b.dataset.tab)) b.style.display = isOwner ? '' : 'none';
+  });
+
   switchAdminTab('orders');
-  renderMenuAdmin(); renderPromoAdmin(); renderIngredientAdmin(); fillSettingsForm();
+  if(isOwner){ renderMenuAdmin(); renderPromoAdmin(); renderIngredientAdmin(); fillSettingsForm(); }
   /* เช็คทุกครั้งที่ล็อกอินเข้ามาว่ามีออเดอร์ค้างจากวันก่อนหน้าหรือไม่ ถ้ามีจะเสนอเก็บถาวรลง Excel
-     แล้วลบออกจากระบบให้อัตโนมัติ (ไม่ทำแบบเงียบๆ — ต้องกด "ตกลง" ก่อนเสมอ กันข้อมูลหายโดยไม่ตั้งใจ) */
-  checkAndArchiveOldOrders();
+     แล้วลบออกจากระบบให้อัตโนมัติ — Excel นั้นมีคอลัมน์ "กำไรโดยประมาณ" ต่อออเดอร์อยู่ด้วย
+     จึงให้ทำได้เฉพาะเจ้าของเท่านั้น ไม่งั้นพนักงานจะเห็นกำไรผ่านไฟล์ที่ดาวน์โหลดได้ */
+  if(isOwner) checkAndArchiveOldOrders();
 }
 function logoutAdmin(){
+  firebase.auth().signOut();
   state.adminOn = false;
+  state.role = null;
   document.getElementById('adminPanel').style.display='none';
   document.getElementById('logoutBtn').style.display='none';
   document.getElementById('adminLogin').style.display='block';
+  document.getElementById('adminEmail').value='';
   document.getElementById('adminPass').value='';
 }
 function switchAdminTab(tab){
+  if(OWNER_ONLY_TABS.includes(tab) && state.role!=='owner'){ tab='orders'; } // กันเผื่อมีการเรียกตรงๆ
   document.querySelectorAll('.admin-tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   ['orders','summary','money','menu','promo','ingredients','settings'].forEach(t=>{
     document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)).style.display = (t===tab)?'block':'none';
@@ -1578,7 +1478,7 @@ function posAddToCart(item, toppings){
   else{
     state.posCart.push({lineId:'p'+Date.now()+Math.random().toString(36).slice(2,6),
       itemId:item.id, name:item.name, price:item.price,
-      cost:Number(item.costFood||0)+Number(item.costPack||0),
+      cost: menuItemCost(item),
       toppings, toppingKey, qty:1});
   }
   renderPOSCart();
@@ -1684,11 +1584,28 @@ function orderProfit(o){
        ออเดอร์เก่าก่อนอัปเดตนี้ที่ยังไม่มี it.cost จะ fallback ไปหาต้นทุนปัจจุบันจากชื่อเมนูเหมือนเดิม */
     const cost = (it.cost!=null) ? Number(it.cost) : (()=>{
       const ref = allItems().find(x=>x.name===it.name);
-      return ref ? (Number(ref.costFood)+Number(ref.costPack)) : 0;
+      return ref ? menuItemCost(ref) : 0;
     })();
     return a + (it.price - cost) * it.qty;
   },0);
 }
+/* =========================================================
+   สูตรเมนู (recipe) — ผูกเมนูเข้ากับวัตถุดิบที่ใช้จริง
+   ถ้าเมนูมี recipe ตั้งไว้ ต้นทุนวัตถุดิบจะคำนวณจากราคาซื้อวัตถุดิบปัจจุบันเสมอ
+   (ราคาวัตถุดิบเปลี่ยนเมื่อไหร่ ต้นทุนเมนูขยับตามทันทีอัตโนมัติ ไม่ต้องแก้เอง)
+   ถ้ายังไม่ตั้งสูตรไว้ (recipe ว่าง) จะ fallback ไปใช้ช่อง "ต้นทุนวัตถุดิบ" ที่กรอกเองตามเดิม
+========================================================= */
+function ingredientUnitPrice(ing){ return ing.buyQty>0 ? Number(ing.buyPrice||0)/Number(ing.buyQty) : 0; }
+function recipeFoodCost(item){
+  return (item.recipe||[]).reduce((sum,r)=>{
+    const ing = state.ingredients.find(x=>x.id===r.ingId);
+    return ing ? sum + ingredientUnitPrice(ing)*Number(r.qty||0) : sum;
+  },0);
+}
+function menuFoodCost(item){
+  return (item.recipe && item.recipe.length) ? recipeFoodCost(item) : Number(item.costFood||0);
+}
+function menuItemCost(item){ return menuFoodCost(item) + Number(item.costPack||0); }
 /* ต้นทุนวัตถุดิบรวมของออเดอร์ (สำหรับสรุปรายวัน/รายเดือนเท่านั้น ไม่โชว์ระดับออเดอร์เดี่ยว) */
 function orderCost(o){ return o.total - orderProfit(o); }
 function monthKeyOf(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
@@ -1759,12 +1676,18 @@ async function renderSummaryTab(){
   const prevMonthTotal = byMonth[prevMonthKey] ? byMonth[prevMonthKey].total : 0;
   const monthGrowthPct = prevMonthTotal>0 ? ((curMonthTotal-prevMonthTotal)/prevMonthTotal*100) : (curMonthTotal>0 ? Infinity : 0);
 
+  const isOwner = state.role==='owner';
+  /* พนักงานเห็นได้แค่ยอดขาย ไม่เห็นกำไร — และเพิ่มยอดแยกเงินสด/โอนของวันนี้ให้ ใช้กระทบยอดปิดกะแทน */
+  const todayCash = todayOrders.filter(o=>o.paymentMethod==='cash').reduce((s,o)=>s+o.total,0);
+  const todayTransfer = todayOrders.filter(o=>o.paymentMethod==='transfer').reduce((s,o)=>s+o.total,0);
   document.getElementById('summaryStatGrid').innerHTML = `
     <div class="stat-card"><b>${money(sum(todayOrders))}</b><span>ยอดขายวันนี้ (${todayOrders.length} ออเดอร์)</span></div>
     <div class="stat-card"><b>${money(weekTotal)}</b><span>ยอดขายสัปดาห์นี้ (${weekCount} ออเดอร์)</span></div>
     <div class="stat-card"><b>${money(curMonthTotal)}</b><span>ยอดขายเดือนนี้ (${curMonthCount} ออเดอร์)</span><div style="margin-top:6px;">${growthBadge(monthGrowthPct)}</div></div>
     <div class="stat-card"><b>${money(yearTotal)}</b><span>ยอดขายปีนี้ (${yearCount} ออเดอร์)</span></div>
-    <div class="stat-card"><b>${money(yearProfit)}</b><span>กำไรโดยประมาณปีนี้</span></div>
+    ${isOwner
+      ? `<div class="stat-card"><b>${money(yearProfit)}</b><span>กำไรโดยประมาณปีนี้</span></div>`
+      : `<div class="stat-card"><b>${money(todayCash)} / ${money(todayTransfer)}</b><span>วันนี้ เงินสด / โอน (ไว้กระทบยอดปิดกะ)</span></div>`}
   `;
 
   // รายการยอดขายของเดือนนี้ ทีละออเดอร์ — แสดงได้เฉพาะออเดอร์ที่ยังไม่ถูกเก็บถาวร (ยอดรวมของวันที่เก็บถาวรแล้วยังคิดในสถิติด้านบนตามปกติ)
@@ -1773,7 +1696,7 @@ async function renderSummaryTab(){
       <td>${o.id}</td>
       <td>${new Date(o.time).toLocaleString('th-TH')}</td>
       <td>${o.name||'-'}</td>
-      <td>${o.channel==='pos'?'หน้าร้าน':'ออนไลน์'}</td>
+      <td>หน้าร้าน</td>
       <td>${money(o.total)}</td>
     </tr>
   `).join('') || '<tr><td colspan="5" style="color:var(--coffee-soft);">ไม่มีออเดอร์ที่ยังไม่ถูกเก็บถาวรในเดือนนี้</td></tr>';
@@ -1798,21 +1721,26 @@ async function renderSummaryTab(){
       <div class="month-card-body">
         <div class="table-scroll">
           <table class="summary-table">
-            <thead><tr><th>วันที่</th><th>จำนวนออเดอร์</th><th>ยอดขาย</th><th>กำไรโดยประมาณ</th></tr></thead>
-            <tbody>${dayList.map(([iso,d])=>`<tr><td>${dayLabelFromIso(iso)}</td><td>${d.count}</td><td>${money(d.total)}</td><td>${money(d.profit)}</td></tr>`).join('')}</tbody>
+            <thead><tr><th>วันที่</th><th>จำนวนออเดอร์</th><th>ยอดขาย</th>${isOwner?'<th>กำไรโดยประมาณ</th>':''}</tr></thead>
+            <tbody>${dayList.map(([iso,d])=>`<tr><td>${dayLabelFromIso(iso)}</td><td>${d.count}</td><td>${money(d.total)}</td>${isOwner?`<td>${money(d.profit)}</td>`:''}</tr>`).join('')}</tbody>
           </table>
         </div>
       </div>
     </div>`;
   }).join('') || '<p style="color:var(--coffee-soft);">ยังไม่มีข้อมูลยอดขาย</p>';
+
+  /* ปุ่มดาวน์โหลด Excel มีคอลัมน์กำไรต่อออเดอร์อยู่ด้วย จึงซ่อนไว้ให้เห็นเฉพาะเจ้าของ */
+  const exportBtn = document.querySelector('#tabSummary button[onclick="exportSalesExcel()"]');
+  if(exportBtn) exportBtn.style.display = isOwner ? '' : 'none';
 }
 async function exportSalesExcel(){
+  if(state.role!=='owner'){ toast('ขั้นตอนนี้ให้เจ้าของร้านเป็นคนทำครับ'); return; }
   if(typeof XLSX==='undefined'){ toast('โหลดไลบรารี Excel ไม่สำเร็จ ลองใหม่อีกครั้ง'); return; }
   const orders = await fetchOrders();
   const archived = await fetchArchivedDaySummaries();
   const ordersSheet = orders.map(o=>({
     'เลขที่ออเดอร์':o.id, 'วันเวลา':new Date(o.time).toLocaleString('th-TH'),
-    'ช่องทาง':o.channel==='pos'?'หน้าร้าน':'ออนไลน์', 'ชื่อลูกค้า':o.name, 'เบอร์โทร':o.phone,
+    'ช่องทาง':'หน้าร้าน', 'ชื่อลูกค้า':o.name, 'เบอร์โทร':o.phone,
     'รับสินค้า':o.fulfil==='delivery'?'จัดส่ง':'หน้าร้าน', 'วิธีชำระเงิน':o.paymentMethod==='cash'?'เงินสด':'โอนเงิน',
     'รายการ':o.items.map(i=>`${i.name} x${i.qty}${i.toppings.length?' ('+i.toppings.join(', ')+')':''}`).join(', '),
     'ยอดรวม':o.total, 'กำไรโดยประมาณ':orderProfit(o), 'สถานะ':o.status
@@ -1877,7 +1805,7 @@ async function renderOrdersTab(ordersOverride){
   const todayProfit = todayOrders.reduce((s,o)=>{
     return s + o.items.reduce((a,it)=>{
       const ref = allItems().find(x=>x.name===it.name);
-      const cost = ref ? (Number(ref.costFood)+Number(ref.costPack)) : 0;
+      const cost = ref ? menuItemCost(ref) : 0;
       return a + (it.price - cost) * it.qty;
     },0);
   },0);
@@ -1893,7 +1821,7 @@ async function renderOrdersTab(ordersOverride){
     const itemsTxt = o.items.map(i=>`${i.name} x${i.qty}${i.toppings.length?' ('+i.toppings.join(', ')+')':''}`).join(' · ');
     const t = new Date(o.time);
     const statusLabel = {pending:'รอตรวจสลิป', preparing:'กำลังปิ้ง', done:'เสร็จแล้ว', cancelled:'ยกเลิกแล้ว'};
-    const channelBadge = o.channel==='pos' ? '<span class="pos-badge pos">หน้าร้าน</span>' : '<span class="pos-badge online">ออนไลน์</span>';
+    const channelBadge = '<span class="pos-badge pos">หน้าร้าน</span>';
     const payBadge = o.paymentMethod==='cash' ? '<span class="pay-badge">💵 เงินสด</span>' : '<span class="pay-badge">📱 โอนเงิน</span>';
     const slipUrl = o.slipLink || o.slip;
     const statusBtn = (val, label) => `<button class="mini-btn ${o.status===val?'primary':''}" onclick="setOrderStatus('${o.id}','${val}')">${label}</button>`;
@@ -1965,7 +1893,7 @@ async function cancelOrder(id){
 
 /* ---- MENU / PROMO ADMIN TABLES ---- */
 function profitCalc(it){
-  const totalCost = Number(it.costFood||0) + Number(it.costPack||0);
+  const totalCost = menuItemCost(it);
   const profit = Number(it.price||0) - totalCost;
   const pct = it.price>0 ? (profit/it.price*100) : 0;
   return {totalCost, profit, pct};
@@ -1980,6 +1908,7 @@ function renderPromoAdmin(){
 }
 function menuRow(it,i,arrName){
   const c = profitCalc(it);
+  const hasRecipe = it.recipe && it.recipe.length>0;
   return `<tr>
     <td class="name-cell"><input value="${it.name}" onchange="editItem('${arrName}','${it.id}','name',this.value)"></td>
     <td><select onchange="editItem('${arrName}','${it.id}','cat',this.value)">
@@ -1988,7 +1917,13 @@ function menuRow(it,i,arrName){
     </select></td>
     <td><input type="number" value="${it.stock}" style="width:60px" onchange="editItem('${arrName}','${it.id}','stock',this.value)"></td>
     <td><input type="number" value="${it.price}" style="width:70px" onchange="editItem('${arrName}','${it.id}','price',this.value)"></td>
-    <td><input type="number" step="0.01" value="${it.costFood}" style="width:70px" onchange="editItem('${arrName}','${it.id}','costFood',this.value)"></td>
+    <td>
+      ${hasRecipe
+        ? `<b title="คำนวณจากสูตร — เปลี่ยนตามราคาวัตถุดิบอัตโนมัติ">${menuFoodCost(it).toFixed(2)} 🧪</b>`
+        : `<input type="number" step="0.01" value="${it.costFood}" style="width:60px" onchange="editItem('${arrName}','${it.id}','costFood',this.value)">`
+      }
+      <button class="mini-btn" style="margin-top:4px;" onclick="openRecipeEditor('${arrName}','${it.id}')">${hasRecipe?'แก้สูตร':'+ สูตร'}</button>
+    </td>
     <td><input type="number" step="0.01" value="${it.costPack}" style="width:70px" onchange="editItem('${arrName}','${it.id}','costPack',this.value)"></td>
     <td>${c.totalCost.toFixed(2)}</td>
     <td class="profit-pos">${c.profit.toFixed(2)}</td>
@@ -1998,11 +1933,18 @@ function menuRow(it,i,arrName){
 }
 function promoRow(it,i){
   const c = profitCalc(it);
+  const hasRecipe = it.recipe && it.recipe.length>0;
   return `<tr>
     <td class="name-cell"><input value="${it.name}" onchange="editItem('promo','${it.id}','name',this.value)"></td>
     <td><input type="number" value="${it.stock}" style="width:60px" onchange="editItem('promo','${it.id}','stock',this.value)"></td>
     <td><input type="number" value="${it.price}" style="width:70px" onchange="editItem('promo','${it.id}','price',this.value)"></td>
-    <td><input type="number" step="0.01" value="${it.costFood}" style="width:70px" onchange="editItem('promo','${it.id}','costFood',this.value)"></td>
+    <td>
+      ${hasRecipe
+        ? `<b title="คำนวณจากสูตร — เปลี่ยนตามราคาวัตถุดิบอัตโนมัติ">${menuFoodCost(it).toFixed(2)} 🧪</b>`
+        : `<input type="number" step="0.01" value="${it.costFood}" style="width:60px" onchange="editItem('promo','${it.id}','costFood',this.value)">`
+      }
+      <button class="mini-btn" style="margin-top:4px;" onclick="openRecipeEditor('promo','${it.id}')">${hasRecipe?'แก้สูตร':'+ สูตร'}</button>
+    </td>
     <td><input type="number" step="0.01" value="${it.costPack}" style="width:70px" onchange="editItem('promo','${it.id}','costPack',this.value)"></td>
     <td>${c.totalCost.toFixed(2)}</td>
     <td class="profit-pos">${c.profit.toFixed(2)}</td>
@@ -2010,6 +1952,76 @@ function promoRow(it,i){
     <td><button class="mini-btn danger" onclick="removeItem('promo','${it.id}')">ลบ</button></td>
   </tr>`;
 }
+let recipeEditTarget = null; // {arrName, id}
+function openRecipeEditor(arrName, id){
+  const it = state[arrName].find(x=>x.id===id);
+  if(!it) return;
+  recipeEditTarget = {arrName, id};
+  document.getElementById('recipeItemName').textContent = it.name;
+  const existing = {};
+  (it.recipe||[]).forEach(r=>{ existing[r.ingId] = r.qty; });
+  const list = document.getElementById('recipeIngList');
+  list.innerHTML = state.ingredients.map(ing=>{
+    const checked = existing[ing.id]!=null;
+    const qty = checked ? existing[ing.id] : (ing.usePerItem||0);
+    return `
+      <label style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid var(--coffee-line);">
+        <input type="checkbox" data-ing="${ing.id}" ${checked?'checked':''} onchange="renderRecipeLiveCost()" style="flex:none;">
+        <span style="flex:1;">${ing.name} <span style="color:var(--coffee-soft);font-size:0.78rem;">(฿${ingredientUnitPrice(ing).toFixed(3)}/${ing.unit})</span></span>
+        <input type="number" step="0.01" value="${qty}" data-qty="${ing.id}" style="width:70px;" oninput="renderRecipeLiveCost()">
+        <span style="color:var(--coffee-soft);font-size:0.78rem;width:40px;">${ing.unit}</span>
+      </label>`;
+  }).join('') || '<p style="color:var(--coffee-soft);">ยังไม่มีวัตถุดิบในระบบ ไปเพิ่มที่หน้า "วัตถุดิบ" ก่อน</p>';
+  renderRecipeLiveCost();
+  document.getElementById('recipeOverlay').classList.add('open');
+}
+function closeRecipeEditor(){
+  document.getElementById('recipeOverlay').classList.remove('open');
+  recipeEditTarget = null;
+}
+function readRecipeFromForm(){
+  const rows = [...document.querySelectorAll('#recipeIngList input[type=checkbox]')];
+  return rows.filter(cb=>cb.checked).map(cb=>{
+    const ingId = cb.dataset.ing;
+    const qtyInput = document.querySelector(`#recipeIngList input[data-qty="${ingId}"]`);
+    return {ingId, qty:Number(qtyInput.value)||0};
+  });
+}
+function renderRecipeLiveCost(){
+  const recipe = readRecipeFromForm();
+  const cost = recipe.reduce((sum,r)=>{
+    const ing = state.ingredients.find(x=>x.id===r.ingId);
+    return ing ? sum + ingredientUnitPrice(ing)*r.qty : sum;
+  },0);
+  document.getElementById('recipeLiveCost').textContent = '฿'+cost.toFixed(2);
+}
+async function saveRecipe(){
+  if(!recipeEditTarget) return;
+  const {arrName, id} = recipeEditTarget;
+  const it = state[arrName].find(x=>x.id===id);
+  if(!it) return;
+  const recipe = readRecipeFromForm();
+  if(recipe.length===0){ toast('ยังไม่ได้ติ๊กวัตถุดิบเลย ถ้าจะล้างสูตรใช้ปุ่ม "ล้างสูตร" แทน'); return; }
+  it.recipe = recipe;
+  await persist(arrName);
+  closeRecipeEditor();
+  if(arrName==='menu') renderMenuAdmin(); else renderPromoAdmin();
+  renderPOSGrid();
+  toast('บันทึกสูตรเรียบร้อยแล้ว — ต้นทุนจะคำนวณจากราคาวัตถุดิบปัจจุบันให้อัตโนมัติทุกครั้ง');
+}
+async function clearRecipe(){
+  if(!recipeEditTarget) return;
+  const {arrName, id} = recipeEditTarget;
+  const it = state[arrName].find(x=>x.id===id);
+  if(!it) return;
+  if(!confirm('ล้างสูตรของเมนูนี้ใช่ไหม? ต้นทุนจะกลับไปใช้ค่าที่กรอกเองในช่อง "ต้นทุนวัตถุดิบ" แทน')) return;
+  it.recipe = [];
+  await persist(arrName);
+  closeRecipeEditor();
+  if(arrName==='menu') renderMenuAdmin(); else renderPromoAdmin();
+  renderPOSGrid();
+}
+
 async function editItem(arrName, id, field, value){
   const arr = state[arrName];
   const it = arr.find(x=>x.id===id);
@@ -2029,12 +2041,12 @@ async function removeItem(arrName, id){
 }
 async function addMenuItem(){
   const id = 'm'+Date.now();
-  state.menu.push({id,name:'เมนูใหม่',cat:'toast',stock:10,price:20,costFood:0,costPack:1.46,desc:''});
+  state.menu.push({id,name:'เมนูใหม่',cat:'toast',stock:10,price:20,costFood:0,costPack:1.46,desc:'',recipe:[]});
   await persist('menu'); renderMenuAdmin(); renderPOSGrid();
 }
 async function addPromoItem(){
   const id = 'p'+Date.now();
-  state.promo.push({id,name:'โปรใหม่',stock:10,price:30,costFood:0,costPack:1.46,desc:''});
+  state.promo.push({id,name:'โปรใหม่',stock:10,price:30,costFood:0,costPack:1.46,desc:'',recipe:[]});
   await persist('promo'); renderPromoAdmin(); renderPOSGrid();
 }
 
@@ -2076,12 +2088,8 @@ async function addIngredient(){
 /* ---- SETTINGS ---- */
 function fillSettingsForm(){
   document.getElementById('setShopName').value = state.settings.shopName;
-  document.getElementById('setEmail').value = state.settings.email;
   document.getElementById('setHoursWeekday').value = state.settings.hoursWeekday;
   document.getElementById('setHoursWeekend').value = state.settings.hoursWeekend;
-  document.getElementById('setAddress').value = state.settings.address;
-  document.getElementById('setDeliveryFee').value = state.settings.deliveryFee;
-  document.getElementById('setStoreOpen').value = state.settings.storeOpen;
   document.getElementById('setOpeningCash').value = state.settings.openingCash||0;
   document.getElementById('setOpeningTransfer').value = state.settings.openingTransfer||0;
   document.getElementById('setGsheetUrl').value = state.settings.gsheetUrl||'';
@@ -2089,21 +2097,30 @@ function fillSettingsForm(){
 }
 async function saveSettings(){
   state.settings.shopName = document.getElementById('setShopName').value.trim() || state.settings.shopName;
-  state.settings.email = document.getElementById('setEmail').value.trim() || state.settings.email;
   state.settings.hoursWeekday = document.getElementById('setHoursWeekday').value.trim();
   state.settings.hoursWeekend = document.getElementById('setHoursWeekend').value.trim();
-  state.settings.address = document.getElementById('setAddress').value.trim();
-  state.settings.deliveryFee = Number(document.getElementById('setDeliveryFee').value)||0;
-  state.settings.storeOpen = document.getElementById('setStoreOpen').value;
   state.settings.openingCash = Number(document.getElementById('setOpeningCash').value)||0;
   state.settings.openingTransfer = Number(document.getElementById('setOpeningTransfer').value)||0;
   state.settings.gsheetUrl = document.getElementById('setGsheetUrl').value.trim();
   state.settings.gsheetSecret = document.getElementById('setGsheetSecret').value.trim();
-  const newPass = document.getElementById('setNewPass').value.trim();
-  if(newPass) state.settings.ownerPass = newPass;
   await persist('settings');
-  document.getElementById('setNewPass').value='';
   toast('บันทึกการตั้งค่าเรียบร้อยแล้ว');
+}
+async function changeMyPassword(){
+  const newPass = document.getElementById('setNewPass').value;
+  if(!newPass || newPass.length<6){ toast('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'); return; }
+  try{
+    await firebase.auth().currentUser.updatePassword(newPass);
+    document.getElementById('setNewPass').value='';
+    toast('เปลี่ยนรหัสผ่านเรียบร้อยแล้ว');
+  }catch(e){
+    console.warn('change password failed', e);
+    if(e.code==='auth/requires-recent-login'){
+      toast('ต้องออกจากระบบแล้วล็อกอินใหม่ก่อนเปลี่ยนรหัสผ่าน (เพื่อความปลอดภัย)');
+    } else {
+      toast('เปลี่ยนรหัสผ่านไม่สำเร็จ ลองใหม่อีกครั้ง');
+    }
+  }
 }
 
 /* =========================================================
