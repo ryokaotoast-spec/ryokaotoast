@@ -240,6 +240,7 @@ textarea{resize:vertical;min-height:70px;}
 .order-card .oc-top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
 .order-card .oc-items{font-size:0.85rem;color:var(--coffee-soft);margin:8px 0;}
 .order-status{padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:700;}
+.order-status.prep{background:#EFE3F7;color:#5B2E8A;}
 .order-status.pending{background:#FDECC8;color:#8A5A00;}
 .order-status.preparing{background:#DCEBFB;color:#1E5E9E;}
 .order-status.done{background:#E1F1DD;color:#2E6B29;}
@@ -261,6 +262,10 @@ textarea{resize:vertical;min-height:70px;}
   border:1.5px solid var(--line);border-radius:10px;padding:10px 14px;font-size:0.9rem;background:var(--white);}
 .topping-opt input{width:auto;margin-right:8px;}
 .topping-opt .t-price{color:var(--coffee-soft);font-size:0.82rem;}
+.topping-stepper{display:flex;align-items:center;gap:6px;}
+.topping-stepper button{width:26px;height:26px;border-radius:50%;background:var(--cream-2);border:1px solid var(--line);font-size:0.95rem;}
+.topping-stepper button:disabled{opacity:0.4;}
+.topping-stepper b{min-width:16px;text-align:center;font-size:0.92rem;}
 .qty-inline{display:flex;align-items:center;gap:10px;justify-content:center;margin:12px 0;}
 .qty-inline button{width:34px;height:34px;border-radius:50%;background:var(--cream-2);border:1px solid var(--line);font-size:1.1rem;}
 .qty-inline b{font-size:1.1rem;min-width:24px;text-align:center;}
@@ -282,6 +287,7 @@ textarea{resize:vertical;min-height:70px;}
 .pos-item h4{font-size:0.85rem;font-weight:600;font-family:'Prompt',sans-serif;}
 .pos-item .pi-row{display:flex;align-items:center;justify-content:space-between;margin-top:6px;}
 .pos-item .pi-price{font-size:0.8rem;color:var(--crust-dark);font-weight:700;}
+.pos-item .pi-topping-note{font-size:0.68rem;color:var(--coffee-soft);margin-top:-4px;}
 .pos-item .pi-add{width:30px;height:30px;border-radius:50%;background:var(--crust);color:#fff;font-size:1.15rem;
   display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(224,138,44,0.35);flex-shrink:0;}
 .pos-item .pi-add:disabled{background:#D8CBB4;box-shadow:none;cursor:not-allowed;}
@@ -298,7 +304,10 @@ textarea{resize:vertical;min-height:70px;}
 /* ---------- improved order card ---------- */
 .order-card .oc-id{font-size:0.72rem;color:var(--coffee-soft);opacity:0.7;}
 .order-card .oc-items-main{font-size:1.02rem;font-weight:600;color:var(--coffee);margin:6px 0 2px;line-height:1.5;}
+.order-card .oc-item-line{margin:2px 0;}
+.order-card .oc-item-toppings{font-weight:400;font-size:0.9rem;color:var(--coffee-soft);}
 .order-card .oc-meta{font-size:0.78rem;color:var(--coffee-soft);}
+.order-card .oc-note{font-size:1rem;font-weight:700;color:var(--berry);background:#FDECEC;border-radius:8px;padding:8px 12px;margin-top:8px;}
 
 /* ---------- sales summary ---------- */
 .summary-table{width:100%;border-collapse:collapse;font-size:0.85rem;}
@@ -502,6 +511,16 @@ textarea{resize:vertical;min-height:70px;}
           </table>
         </div>
         <button class="mini-btn primary" style="margin-top:12px;" onclick="addMenuItem()">+ เพิ่มเมนูใหม่</button>
+
+        <h3 style="font-size:0.95rem;margin:26px 0 4px;">🍬 จัดการท็อปปิ้ง</h3>
+        <p style="font-size:0.78rem;color:var(--coffee-soft);margin:0 0 10px;">ท็อปปิ้งพวกนี้จะให้เลือกใส่เพิ่มได้ในหน้าขายหน้าร้าน (POS) ทุกเมนู ลูกค้าจะเห็นเป็นราคา "+" ต่อชิ้น</p>
+        <div class="table-scroll">
+          <table class="admin-table">
+            <thead><tr><th>ชื่อท็อปปิ้ง</th><th>ราคาเพิ่ม/หน่วย</th><th></th></tr></thead>
+            <tbody id="toppingAdminBody"></tbody>
+          </table>
+        </div>
+        <button class="mini-btn primary" style="margin-top:12px;" onclick="addToppingItem()">+ เพิ่มท็อปปิ้งใหม่</button>
       </div>
 
       <!-- PROMO TAB -->
@@ -543,11 +562,13 @@ textarea{resize:vertical;min-height:70px;}
           </div>
           <div class="field"><label>จำนวนเงิน (บาท)</label><input type="number" id="expAmount" placeholder="0"></div>
         </div>
-        <div class="field-row">
-          <div class="field"><label>จ่ายด้วย</label>
-            <select id="expPayMethod"><option value="cash">เงินสด</option><option value="transfer">โอนเงิน</option></select>
-          </div>
-          <div class="field"><label>บันทึกโดย</label><input type="text" id="expBy" placeholder="ชื่อผู้บันทึก (ไม่บังคับ)"></div>
+        <div class="field">
+          <label>🔗 อัปเดตราคาวัตถุดิบไปด้วยเลยไหม (ถ้ารายจ่ายนี้คือค่าซื้อวัตถุดิบ)</label>
+          <select id="expLinkIngredient" onchange="onExpLinkIngredientChange()"><option value="">— ไม่เชื่อม แค่บันทึกรายจ่ายเฉยๆ —</option></select>
+        </div>
+        <div class="field-row" id="expLinkQtyRow" style="display:none;">
+          <div class="field"><label>ซื้อมาทั้งหมดกี่ <span id="expLinkUnit"></span></label><input type="number" id="expLinkQty" placeholder="เช่น 3000"></div>
+          <div class="field" style="display:flex;align-items:flex-end;"><p style="font-size:0.78rem;color:var(--coffee-soft);margin:0;">ระบบจะคำนวณราคาต่อหน่วยใหม่ให้เองจาก "จำนวนเงิน" ÷ จำนวนที่ซื้อ แล้วอัปเดตในแท็บวัตถุดิบให้ทันที</p></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
           <button class="btn btn-primary" onclick="addExpense()">+ บันทึกรายจ่าย</button>
@@ -1177,6 +1198,20 @@ function renderCatDropdowns(){
   const prevCf = cfSel.value;
   cfSel.innerHTML = state.cashflowCats.map(c=>`<option value="${c}">${c}</option>`).join('');
   if(state.cashflowCats.includes(prevCf)) cfSel.value = prevCf;
+  const linkSel = document.getElementById('expLinkIngredient');
+  const prevLink = linkSel.value;
+  linkSel.innerHTML = '<option value="">— ไม่เชื่อม แค่บันทึกรายจ่ายเฉยๆ —</option>' +
+    state.ingredients.map(ing=>`<option value="${ing.id}">${ing.name} (ตอนนี้ ${money(ing.buyPrice)}/${ing.buyQty}${ing.unit})</option>`).join('');
+  if(state.ingredients.some(i=>i.id===prevLink)) linkSel.value = prevLink;
+}
+function onExpLinkIngredientChange(){
+  const id = document.getElementById('expLinkIngredient').value;
+  const row = document.getElementById('expLinkQtyRow');
+  if(!id){ row.style.display='none'; return; }
+  const ing = state.ingredients.find(i=>i.id===id);
+  document.getElementById('expLinkUnit').textContent = ing ? ing.unit : '';
+  document.getElementById('expLinkQty').value = ing ? ing.buyQty : '';
+  row.style.display='flex';
 }
 function renderCatChips(){
   document.getElementById('expenseCatChips').innerHTML = state.expenseCats.map(c=>
@@ -1273,9 +1308,27 @@ async function addExpense(){
   const category = document.getElementById('expCategory').value;
   const payMethod = document.getElementById('expPayMethod').value;
   const by = document.getElementById('expBy').value.trim();
+  const linkId = document.getElementById('expLinkIngredient').value;
+  let linkedMsg = '';
+  if(linkId){
+    const linkQty = Number(document.getElementById('expLinkQty').value)||0;
+    if(linkQty<=0){
+      toast('กรอก "ซื้อมาทั้งหมดกี่หน่วย" ให้ถูกต้องก่อน ถ้าจะเชื่อมอัปเดตราคาวัตถุดิบ');
+      return;
+    }
+    const ing = state.ingredients.find(i=>i.id===linkId);
+    if(ing){
+      ing.buyPrice = amount;
+      ing.buyQty = linkQty;
+      await persist('ingredients');
+      renderIngredientAdmin();
+      linkedMsg = ` และอัปเดตราคา "${ing.name}" เป็น ${money(amount)}/${linkQty}${ing.unit} แล้ว`;
+    }
+  }
   await addMoneyLogEntry({type:'expense', category, amount, payMethod, by, note});
   document.getElementById('expAmount').value=''; document.getElementById('expNote').value=''; document.getElementById('expBy').value='';
-  toast('บันทึกรายจ่ายเรียบร้อยแล้ว');
+  document.getElementById('expLinkIngredient').value=''; document.getElementById('expLinkQtyRow').style.display='none';
+  toast('บันทึกรายจ่ายเรียบร้อยแล้ว'+linkedMsg);
   renderMoneyTab();
 }
 async function addCashflow(){
@@ -1400,7 +1453,7 @@ async function showAdminPanel(){
   });
 
   switchAdminTab('orders');
-  if(isOwner){ renderMenuAdmin(); renderPromoAdmin(); renderIngredientAdmin(); fillSettingsForm(); }
+  if(isOwner){ renderMenuAdmin(); renderPromoAdmin(); renderIngredientAdmin(); renderToppingAdmin(); fillSettingsForm(); }
   /* เช็คทุกครั้งที่ล็อกอินเข้ามาว่ามีออเดอร์ค้างจากวันก่อนหน้าหรือไม่ ถ้ามีจะเสนอเก็บถาวรลง Excel
      แล้วลบออกจากระบบให้อัตโนมัติ — Excel นั้นมีคอลัมน์ "กำไรโดยประมาณ" ต่อออเดอร์อยู่ด้วย
      จึงให้ทำได้เฉพาะเจ้าของเท่านั้น ไม่งั้นพนักงานจะเห็นกำไรผ่านไฟล์ที่ดาวน์โหลดได้ */
@@ -1439,8 +1492,15 @@ function switchAdminTab(tab){
 ========================================================= */
 let posSelectedItem = null;
 let posConfigQty = 1;
+function toppingPriceLabel(){
+  if(!state.toppings.length) return '';
+  const prices = state.toppings.map(t=>t.price);
+  const min = Math.min(...prices), max = Math.max(...prices);
+  return min===max ? `ท็อปปิ้ง +${money(min)}` : `ท็อปปิ้ง +${money(min)}-${max}`;
+}
 function renderPOSGrid(){
   const grid = document.getElementById('posGrid');
+  const toppingLabel = toppingPriceLabel();
   grid.innerHTML = allItems().map(it=>{
     const soldOut = it.stock<=0;
     const selected = posSelectedItem && posSelectedItem.id===it.id;
@@ -1448,6 +1508,7 @@ function renderPOSGrid(){
     <div class="pos-item ${soldOut?'disabled':''} ${selected?'selected':''}">
       <div class="pi-thumb">${it.name}</div>
       <h4>${it.name}</h4>
+      ${toppingLabel?`<div class="pi-topping-note">${toppingLabel}</div>`:''}
       <div class="pi-row">
         <span class="pi-price">${money(it.price)}</span>
         <button class="pi-add" ${soldOut?'disabled':''} onclick="posAddItem('${it.id}')">+</button>
@@ -1455,25 +1516,41 @@ function renderPOSGrid(){
     </div>`;
   }).join('');
 }
+let posToppingQty = {};
 function selectPOSItem(it){
-  posSelectedItem = it; posConfigQty = 1;
+  posSelectedItem = it; posConfigQty = 1; posToppingQty = {};
   document.getElementById('posConfigEmpty').style.display='none';
   document.getElementById('posConfigBody').style.display='block';
   document.getElementById('posConfigThumb').innerHTML = it.name;
   document.getElementById('posConfigName').textContent = it.name;
   document.getElementById('posConfigPrice').textContent = money(it.price);
   document.getElementById('posConfigQty').textContent = '1';
+  renderPOSToppingPicker();
+  renderPOSGrid();
+}
+function renderPOSToppingPicker(){
   const list = document.getElementById('posConfigToppings');
   if(state.toppings.length===0){
     list.innerHTML = '<p style="color:var(--coffee-soft);font-size:0.82rem;">ร้านยังไม่ได้ตั้งค่าท็อปปิ้งเพิ่มเติม</p>';
-  } else {
-    list.innerHTML = state.toppings.map(t=>`
-      <label class="topping-opt">
-        <span><input type="checkbox" class="pos-topping-chk" value="${t.id}"> ${t.name}</span>
-        <span class="t-price">+${money(t.price)}</span>
-      </label>`).join('');
+    return;
   }
-  renderPOSGrid();
+  list.innerHTML = state.toppings.map(t=>{
+    const qty = posToppingQty[t.id]||0;
+    return `
+    <div class="topping-opt">
+      <span>${t.name} <span class="t-price">+${money(t.price)}${qty>1?` × ${qty} = +${money(t.price*qty)}`:''}</span></span>
+      <span class="topping-stepper">
+        <button onclick="posToppingQtyChange('${t.id}',-1)" ${qty<=0?'disabled':''}>−</button>
+        <b>${qty}</b>
+        <button onclick="posToppingQtyChange('${t.id}',1)">+</button>
+      </span>
+    </div>`;
+  }).join('');
+}
+function posToppingQtyChange(id, d){
+  const cur = posToppingQty[id]||0;
+  posToppingQty[id] = Math.max(0, cur+d);
+  renderPOSToppingPicker();
 }
 function posConfigQtyChange(d){
   posConfigQty = Math.max(1, posConfigQty+d);
@@ -1481,8 +1558,9 @@ function posConfigQtyChange(d){
 }
 function posConfirmAdd(){
   if(!posSelectedItem) return;
-  const checked = [...document.querySelectorAll('.pos-topping-chk:checked')].map(el=>el.value);
-  const chosen = state.toppings.filter(t=>checked.includes(t.id));
+  const chosen = state.toppings
+    .filter(t=>(posToppingQty[t.id]||0)>0)
+    .map(t=>({id:t.id, name:t.name, price:t.price, qty:posToppingQty[t.id]}));
   for(let i=0;i<posConfigQty;i++) posAddToCart(posSelectedItem, chosen);
   toast(posSelectedItem.name+' ถูกเพิ่มลงรายการแล้ว');
   posSelectedItem = null;
@@ -1491,7 +1569,7 @@ function posConfirmAdd(){
   renderPOSGrid();
 }
 function posAddToCart(item, toppings){
-  const toppingKey = toppings.map(t=>t.id).sort().join('-');
+  const toppingKey = toppings.map(t=>t.id+':'+t.qty).sort().join('-');
   const existing = state.posCart.find(l=>l.itemId===item.id && l.toppingKey===toppingKey);
   if(existing){ existing.qty++; }
   else{
@@ -1512,7 +1590,7 @@ function posChangeQty(lineId, delta){
 function posClearCart(){ state.posCart=[]; renderPOSCart(); document.getElementById('posOrderNote').value=''; }
 function posCartTotals(){
   const subtotal = state.posCart.reduce((s,l)=>{
-    const toppingSum = l.toppings.reduce((a,t)=>a+t.price,0);
+    const toppingSum = l.toppings.reduce((a,t)=>a+t.price*(t.qty||1),0);
     return s + (l.price+toppingSum)*l.qty;
   },0);
   return {subtotal, total:subtotal};
@@ -1527,7 +1605,7 @@ function renderPOSCart(){
   }
   summaryBox.style.display='block';
   box.innerHTML = state.posCart.map(l=>{
-    const toppingTxt = l.toppings.length ? ' + '+l.toppings.map(t=>t.name).join(', ') : '';
+    const toppingTxt = l.toppings.length ? ' + '+l.toppings.map(t=>t.qty>1?`${t.name} x${t.qty}`:t.name).join(', ') : '';
     return `<div class="pos-line">
       <span>${l.name}${toppingTxt}</span>
       <span style="display:flex;align-items:center;gap:6px;">
@@ -1578,9 +1656,9 @@ async function posCompletePayment(){
     name: 'ลูกค้าหน้าร้าน', phone: '-',
     fulfil: 'onsite', channel:'pos', paymentMethod: state.posPayMethod,
     address:'', note: document.getElementById('posOrderNote').value.trim(),
-    items: state.posCart.map(l=>({name:l.name, qty:l.qty, price:l.price, cost:l.cost, toppings:l.toppings.map(t=>t.name)})),
+    items: state.posCart.map(l=>({name:l.name, qty:l.qty, price:l.price, cost:l.cost, toppings:l.toppings.map(t=>t.qty>1?`${t.name} x${t.qty}`:t.name)})),
     subtotal: t.subtotal, delivery:0, total: t.total,
-    slip: null, slipLink:'', status:'preparing'
+    slip: null, slipLink:'', status:'prep'
   };
   /* บันทึกออเดอร์ก่อน เพื่อความเร็ว ส่วนสต็อกเมนู/โปรโมชั่นให้บันทึกแบบเบาๆ (เฉพาะตัวเลขสต็อก ไม่รวมรูปภาพ) ในพื้นหลัง */
   await saveOrder(order);
@@ -1854,9 +1932,9 @@ async function renderOrdersTab(ordersOverride){
   const list = document.getElementById('ordersList');
   if(orders.length===0){ list.innerHTML = '<p style="color:var(--coffee-soft);font-size:0.9rem;">ยังไม่มีออเดอร์เข้ามา</p>'; return; }
   list.innerHTML = orders.map(o=>{
-    const itemsTxt = o.items.map(i=>`${i.name} x${i.qty}${i.toppings.length?' ('+i.toppings.join(', ')+')':''}`).join(' · ');
+    const itemsTxt = o.items.map(i=>`<div class="oc-item-line">${i.name} x${i.qty}${i.toppings.length?' <span class="oc-item-toppings">('+i.toppings.join(', ')+')</span>':''}</div>`).join('');
     const t = new Date(o.time);
-    const statusLabel = {pending:'รอตรวจสลิป', preparing:'กำลังปิ้ง', done:'เสร็จแล้ว', cancelled:'ยกเลิกแล้ว'};
+    const statusLabel = {prep:'เตรียมของ', pending:'รอตรวจสลิป', preparing:'กำลังปิ้ง', done:'เสร็จแล้ว', cancelled:'ยกเลิกแล้ว'};
     const channelBadge = '<span class="pos-badge pos">หน้าร้าน</span>';
     const payBadge = o.paymentMethod==='cash' ? '<span class="pay-badge">💵 เงินสด</span>' : '<span class="pay-badge">📱 โอนเงิน</span>';
     const slipUrl = o.slipLink || o.slip;
@@ -1868,10 +1946,12 @@ async function renderOrdersTab(ordersOverride){
         <span class="order-status ${o.status}">${statusLabel[o.status]||o.status}</span>
       </div>
       <div class="oc-meta">${o.name} · ${o.phone} ${channelBadge}${payBadge}</div>
-      <div class="oc-meta" style="margin-top:4px;">${o.fulfil==='delivery'?'จัดส่ง: '+o.address:'รับหน้าร้าน'} · ${t.toLocaleString('th-TH')} · รวม ${money(o.total)}${o.note?' · หมายเหตุ: '+o.note:''}</div>
+      <div class="oc-meta" style="margin-top:4px;">${o.fulfil==='delivery'?'จัดส่ง: '+o.address:'รับหน้าร้าน'} · ${t.toLocaleString('th-TH')} · รวม ${money(o.total)}</div>
+      ${o.note?`<div class="oc-note">📝 ${o.note}</div>`:''}
       <div class="oc-id">เลขที่ออเดอร์ ${o.id}</div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
         ${slipUrl?`<button class="mini-btn" onclick="window.open('${slipUrl}','_blank')">ดูสลิป</button>`:''}
+        ${statusBtn('prep','เตรียมของ')}
         ${statusBtn('pending','รอตรวจสลิป')}
         ${statusBtn('preparing','กำลังปิ้ง')}
         ${statusBtn('done','เสร็จแล้ว')}
@@ -2084,6 +2164,35 @@ async function addPromoItem(){
   const id = 'p'+Date.now();
   state.promo.push({id,name:'โปรใหม่',stock:10,price:30,costFood:0,costPack:1.46,desc:'',recipe:[]});
   await persist('promo'); renderPromoAdmin(); renderPOSGrid();
+}
+
+/* ---- TOPPING ADMIN ---- */
+function renderToppingAdmin(){
+  const body = document.getElementById('toppingAdminBody');
+  body.innerHTML = state.toppings.map(t=>`<tr>
+    <td><input type="text" value="${t.name}" onchange="editToppingItem('${t.id}','name',this.value)"></td>
+    <td><input type="number" value="${t.price}" style="width:80px" onchange="editToppingItem('${t.id}','price',this.value)"></td>
+    <td><button class="mini-btn danger" onclick="removeToppingItem('${t.id}')">ลบ</button></td>
+  </tr>`).join('') || '<tr><td colspan="3" style="color:var(--coffee-soft);">ยังไม่มีท็อปปิ้ง</td></tr>';
+}
+async function editToppingItem(id, field, value){
+  const t = state.toppings.find(x=>x.id===id);
+  if(!t) return;
+  t[field] = field==='price' ? Number(value) : value;
+  await persist('toppings');
+  renderToppingAdmin(); renderPOSGrid();
+}
+async function removeToppingItem(id){
+  if(!confirm('ลบท็อปปิ้งนี้ใช่ไหม?')) return;
+  state.toppings = state.toppings.filter(x=>x.id!==id);
+  await persist('toppings');
+  renderToppingAdmin(); renderPOSGrid();
+}
+async function addToppingItem(){
+  const id = 't'+Date.now();
+  state.toppings.push({id, name:'ท็อปปิ้งใหม่', price:5});
+  await persist('toppings');
+  renderToppingAdmin(); renderPOSGrid();
 }
 
 /* ---- INGREDIENTS ADMIN ---- */
